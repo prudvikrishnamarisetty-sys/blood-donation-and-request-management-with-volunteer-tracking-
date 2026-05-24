@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block title %}Notifications{% endblock %}
+{% block content %}
+<div class="dashboard-header"><h1>🔔 Notifications</h1><p class="dash-sub">All your alerts and updates</p></div>
+<div class="panel glass">
+  {% if notes %}
+  <div class="notif-full-list">
+    {% for n in notes %}
+    <div class="notif-full-item {% if not n.is_read %}unread{% endif %} ntype-{{ n.ntype or 'info' }}">
+      <div class="notif-full-icon">
+        {% if n.ntype == 'urgent' %}🆘{% elif n.ntype == 'success' %}✅{% elif n.ntype == 'danger' %}❌{% else %}ℹ️{% endif %}
+      </div>
+      <div class="notif-full-body">
+        <div class="notif-full-title">{{ n.title }}</div>
+        <div class="notif-full-msg">{{ n.message }}</div>
+        {% if n.blood_group %}<span class="bg-badge-xs">{{ n.blood_group }}</span>{% endif %}
+        <div class="notif-full-time">{{ n.created_at[:16] }}</div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}<div class="empty-state">🎉 No notifications yet!</div>{% endif %}
+</div>
+{% endblock %}

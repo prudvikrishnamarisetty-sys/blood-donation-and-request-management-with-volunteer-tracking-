@@ -1,0 +1,574 @@
+{% extends "base.html" %}
+{% block title %}Blood Bank Dashboard{% endblock %}
+{% block content %}
+<div class="dashboard-header">
+  <h1>🏦 {{ current_user.full_name }}</h1>
+  <p class="dash-sub">Blood Bank Institution Dashboard · Reg: {{ current_user.org_reg_no or '—' }} · {{ current_user.address or '' }}
+    {% if not current_user.is_verified %}<span class="badge badge-warning ms-2">⏳ Pending Admin Approval</span>{% endif %}
+  </p>
+</div>
+
+{% if not current_user.is_verified %}
+<div class="alert-banner alert-warning">
+  <span>⚠️ Your blood bank account is pending admin approval. You can view your dashboard, but actions are disabled until verified.</span>
+</div>
+{% endif %}
+
+<!-- KPI Cards -->
+<div class="kpi-grid">
+  <div class="kpi-card kpi-total"><div class="kpi-icon">💉</div><div class="kpi-num" data-count="{{ bb_stats.total }}">0</div><div class="kpi-label">Total Units Stocked</div></div>
+  <div class="kpi-card kpi-fulfilled"><div class="kpi-icon">✅</div><div class="kpi-num" data-count="{{ bb_stats.available }}">0</div><div class="kpi-label">Available Units</div></div>
+  <div class="kpi-card kpi-warn"><div class="kpi-icon">⚠️</div><div class="kpi-num" data-count="{{ bb_stats.expiring }}">0</div><div class="kpi-label">Expiring in 7 Days</div></div>
+  <div class="kpi-card kpi-danger"><div class="kpi-icon">🗑️</div><div class="kpi-num" data-count="{{ bb_stats.expired }}">0</div><div class="kpi-label">Expired Units</div></div>
+  <div class="kpi-card kpi-pending"><div class="kpi-icon">⏳</div><div class="kpi-num" data-count="{{ bb_stats.pending_requests }}">0</div><div class="kpi-label">Pending Approvals</div></div>
+  <div class="kpi-card kpi-donors"><div class="kpi-icon">🚨</div><div class="kpi-num" data-count="{{ bb_stats.incidents_open }}">0</div><div class="kpi-label">Open Incidents</div></div>
+</div>
+
+<!-- Tab Bar -->
+<div class="tab-bar mt-2">
+  <button class="tab-btn active" onclick="switchTab('requests', this)">⏳ Approve Requests
+    {% if pending_requests %}<span class="tab-badge">{{ pending_requests|length }}</span>{% endif %}
+  </button>
+  <button class="tab-btn" onclick="switchTab('overview', this)">📊 Overview</button>
+  <button class="tab-btn" onclick="switchTab('inventory', this)">📦 Inventory
+    {% if bb_stats.expiring > 0 %}<span class="tab-badge">{{ bb_stats.expiring }}</span>{% endif %}
+  </button>
+  <button class="tab-btn" onclick="switchTab('donors', this)">🧑‍⚕️ Donor Directory</button>
+  <button class="tab-btn" onclick="switchTab('reports', this)">📝 Reports &amp; Incidents
+    {% if bb_stats.incidents_open > 0 %}<span class="tab-badge">{{ bb_stats.incidents_open }}</span>{% endif %}
+  </button>
+</div>
+
+<!-- ===== TAB 0: APPROVE REQUESTS ===== -->
+<div id="tab-requests" class="tab-content active">
+
+  <!-- Pending Hospital Requests — Approval -->
+  <div class="panel glass mt-2">
+    <div class="panel-header">
+      <h2>⏳ Pending Hospital Requests
+        {% if pending_requests %}<span class="badge badge-warning">{{ pending_requests|length }}</span>{% endif %}
+      </h2>
+    </div>
+    {% if pending_requests %}
+    <div class="table-wrap">
+      <table class="data-table">
+        <thead><tr><th>#</th><th>Hospital</th><th>Patient</th><th>Blood</th><th>Units</th><th>Priority</th><th>Location</th><th>Date</th><th>Actions</th></tr></thead>
+        <tbody>
+        {% for req in pending_requests %}
+        <tr>
+          <td><strong>#{{ req.id }}</strong></td>
+          <td>{{ req.hospital_name }}</td>
+          <td>{{ req.patient_name or '—' }}</td>
+          <td><span class="bg-badge">{{ req.blood_group }}</span></td>
+          <td>{{ req.units }}</td>
+          <td><span class="priority-badge priority-{{ req.priority|lower }}">{{ req.priority }}</span></td>
+          <td>{{ req.location or '—' }}</td>
+          <td>{{ req.created_at[:10] }}</td>
+          <td class="action-cell">
+            {% if current_user.is_verified %}
+            <form method="POST" action="{{ url_for('bb_approve_request', req_id=req.id) }}" class="inline-form">
+              <input type="hidden" name="action" value="approve">
+              <button class="btn btn-xs btn-success">✅ Approve</button>
+            </form>
+            <button class="btn btn-xs btn-danger" onclick="toggleBbReject({{ req.id }})">❌ Reject</button>
+            <form method="POST" action="{{ url_for('bb_approve_request', req_id=req.id) }}" class="reject-form" id="bbr-{{ req.id }}" style="display:none">
+              <input type="hidden" name="action" value="reject">
+              <input type="text" name="note" placeholder="Rejection reason…" class="form-control form-control-sm">
+              <button class="btn btn-xs btn-danger">Confirm</button>
+            </form>
+            {% else %}
+            <span class="text-muted">⏳ Account pending verification</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="empty-state">🎉 No pending hospital requests — all clear!</div>
+    {% endif %}
+  </div>
+
+  <!-- Active / In-Progress Requests -->
+  <div class="panel glass mt-2">
+    <div class="panel-header"><h2>🚑 Approved & In-Progress Requests</h2></div>
+    {% if active_requests %}
+    <div class="table-wrap">
+      <table class="data-table">
+        <thead><tr><th>#</th><th>Hospital</th><th>Blood</th><th>Units</th><th>Priority</th><th>Status</th><th>Date</th></tr></thead>
+        <tbody>
+        {% for r in active_requests %}
+        <tr>
+          <td>#{{ r.id }}</td>
+          <td>{{ r.hospital_name }}</td>
+          <td><span class="bg-badge">{{ r.blood_group }}</span></td>
+          <td>{{ r.units }}</td>
+          <td><span class="priority-badge priority-{{ r.priority|lower }}">{{ r.priority }}</span></td>
+          <td><span class="status-pill status-{{ r.status|lower }}">{{ r.status }}</span></td>
+          <td>{{ r.created_at[:10] }}</td>
+        </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="empty-state">✅ No active requests in progress.</div>
+    {% endif %}
+  </div>
+
+  <!-- Donor → Blood Bank Donation Requests (Accept/Reject HERE) -->
+  {% if bb_donation_reqs %}
+  <div class="panel glass mt-2" style="border:1px solid rgba(34,197,94,0.35);background:rgba(34,197,94,0.06);">
+    <div class="panel-header">
+      <h2>🩸 Donors Wanting to Donate</h2>
+      <span class="badge badge-success">{{ bb_donation_reqs|length }} Pending</span>
+    </div>
+    <p style="color:#ccc;font-size:0.85rem;margin-bottom:0.75rem;">
+      These donors have submitted a donation request directly to your blood bank. Accept to confirm or reject.
+    </p>
+    <div class="table-wrap">
+      <table class="data-table">
+        <thead><tr><th>Donor</th><th>Blood</th><th>Units</th><th>Note</th><th>Date</th><th>Actions</th></tr></thead>
+        <tbody>
+        {% for req in bb_donation_reqs %}
+        <tr>
+          <td>
+            {{ req.donor_name }}<br>
+            {% if req.donor_phone %}<small>📞 {{ req.donor_phone }}</small><br>{% endif %}
+            {% if req.donor_address %}<small>📍 {{ req.donor_address }}</small>{% endif %}
+          </td>
+          <td><span class="bg-badge">{{ req.blood_group }}</span></td>
+          <td>{{ req.units }}</td>
+          <td>{{ req.note or '—' }}</td>
+          <td>{{ req.created_at[:10] }}</td>
+          <td class="action-cell" style="display:flex;gap:0.3rem;flex-wrap:wrap;">
+            {% if current_user.is_verified %}
+            <form method="POST" action="{{ url_for('bb_accept_donor_donation', req_id=req.id) }}" style="display:inline"
+                  onsubmit="return confirm('Accept this donor\'s offer?')">
+              <button class="btn btn-xs btn-success">✅ Accept</button>
+            </form>
+            <form method="POST" action="{{ url_for('bb_reject_donor_donation', req_id=req.id) }}" style="display:inline"
+                  onsubmit="return confirm('Reject this request?')">
+              <button class="btn btn-xs btn-danger">❌ Reject</button>
+            </form>
+            {% else %}
+            <span class="text-muted">⏳ Pending verification</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% endif %}
+
+</div><!-- end tab-requests -->
+
+<!-- ===== TAB 1: OVERVIEW ===== -->
+<div id="tab-overview" class="tab-content" style="display:none">
+
+  <!-- Charts and low stock only in overview -->
+  <div class="dash-grid-2col mt-2">
+    <!-- Inventory chart -->
+    <div class="panel glass">
+      <div class="panel-header"><h2>📊 My Inventory by Blood Group</h2></div>
+      <canvas id="bbOwnInvChart" height="240"></canvas>
+    </div>
+
+    <!-- Unit status doughnut -->
+    <div class="panel glass">
+      <div class="panel-header"><h2>🍩 Unit Status Breakdown</h2></div>
+      <canvas id="bbStatusChart" height="240"></canvas>
+    </div>
+  </div>
+
+  <!-- Low stock warnings -->
+  {% set low_stock = bb_inv | selectattr('units', 'le', 5) | list %}
+  {% if low_stock %}
+  <div class="panel glass mt-2 panel-warn">
+    <div class="panel-header"><h2>⚠️ Low Stock Alert</h2></div>
+    <div class="blood-grid">
+      {% for item in low_stock %}
+      <div class="blood-card blood-card-low">
+        <div class="bg-type">{{ item.blood_group }}</div>
+        <div class="bg-units">{{ item.units }}</div>
+        <div class="bg-label">units</div>
+        <div class="bg-status">⚠️ Low</div>
+        <div class="bg-threshold">Threshold: {{ item.threshold_units }}</div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+
+</div><!-- end tab-overview -->
+
+<!-- ===== TAB 2: INVENTORY ===== -->
+<div id="tab-inventory" class="tab-content" style="display:none">
+
+  <!-- Add unit form -->
+  {% if current_user.is_verified %}
+  <div class="panel glass mt-2">
+    <div class="panel-header"><h2>➕ Log New Blood Unit Collection</h2></div>
+    <form method="POST" action="{{ url_for('bb_add_unit') }}" class="auth-form">
+      <div class="form-row">
+        <div class="form-group">
+          <label>Blood Group</label>
+          <select name="blood_group" class="form-control" required>
+            <option value="">Select Group</option>
+            {% for bg in blood_groups %}<option value="{{ bg }}">{{ bg }}</option>{% endfor %}
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Volume (ml)</label>
+          <input type="number" name="volume_ml" value="450" min="100" max="600" class="form-control">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Source</label>
+          <select name="source" class="form-control">
+            <option value="donation">Voluntary Donation</option>
+            <option value="camp">Blood Camp</option>
+            <option value="external">External Supply</option>
+            <option value="replacement">Replacement</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Collection Date</label>
+          <input type="date" name="collection_date" class="form-control" value="{{ now.strftime('%Y-%m-%d') }}">
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Notes (optional)</label>
+        <input type="text" name="notes" placeholder="Donor screening notes, camp name, etc." class="form-control">
+      </div>
+      <button class="btn btn-primary">🩸 Log Collection (42-day expiry auto-set)</button>
+    </form>
+  </div>
+  {% else %}
+  <div class="panel glass mt-2"><div class="empty-state">⏳ Account pending admin approval — unit management will be available after verification.</div></div>
+  {% endif %}
+
+  <!-- Inventory grid -->
+  <div class="panel glass mt-2">
+    <div class="panel-header">
+      <h2>📦 My Current Inventory</h2>
+      {% if current_user.is_verified %}
+      <span class="text-muted" style="font-size:0.8rem">Click ✏️ to edit any group</span>
+      {% endif %}
+    </div>
+    <div class="blood-grid">
+      {% for item in bb_inv %}
+      <div class="blood-card {% if item.units <= item.threshold_units %}blood-card-low{% elif item.units <= item.threshold_units*2 %}blood-card-warn{% else %}blood-card-ok{% endif %}">
+        <div class="bg-type">{{ item.blood_group }}</div>
+        <div class="bg-units" id="units-disp-{{ item.blood_group }}">{{ item.units }}</div>
+        <div class="bg-label">units</div>
+        {% set bar_width = [item.units * 5, 100] | min %}
+        <div class="bg-bar"><div class="bg-bar-fill" style="width:{{ bar_width }}%"></div></div>
+        <div class="bg-status">{% if item.units <= item.threshold_units %}⚠️ Low{% elif item.units <= item.threshold_units*2 %}⚡ Fair{% else %}✅ Good{% endif %}</div>
+        <div class="bg-threshold">Threshold: {{ item.threshold_units }}</div>
+        {% if current_user.is_verified %}
+        <button class="btn btn-xs btn-outline inv-edit-btn" style="margin-top:0.4rem;width:100%"
+                onclick="toggleInvEdit('{{ item.blood_group }}')">✏️ Edit</button>
+        <div id="inv-edit-{{ item.blood_group }}" class="inv-edit-form" style="display:none">
+          <form method="POST" action="{{ url_for('bb_edit_inventory') }}" class="inline-form" style="flex-direction:column;gap:0.3rem;margin-top:0.4rem">
+            <input type="hidden" name="blood_group" value="{{ item.blood_group }}">
+            <label style="font-size:0.75rem;color:#aaa;margin-bottom:0">Units</label>
+            <input type="number" name="units" value="{{ item.units }}" min="0" max="9999"
+                   class="form-control form-control-sm" placeholder="Units" required>
+            <label style="font-size:0.75rem;color:#aaa;margin-bottom:0">Threshold</label>
+            <input type="number" name="threshold_units" value="{{ item.threshold_units }}" min="1" max="9999"
+                   class="form-control form-control-sm" placeholder="Threshold" required>
+            <div style="display:flex;gap:0.3rem;margin-top:0.2rem">
+              <button class="btn btn-xs btn-success" style="flex:1">💾 Save</button>
+              <button type="button" class="btn btn-xs btn-outline" style="flex:1"
+                      onclick="toggleInvEdit('{{ item.blood_group }}')">✕</button>
+            </div>
+          </form>
+        </div>
+        {% endif %}
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+
+  <!-- Expiring soon -->
+  {% if expiring_soon %}
+  <div class="panel glass mt-2 panel-warn">
+    <div class="panel-header"><h2>⚠️ Expiring Within 7 Days</h2></div>
+    <div class="table-wrap">
+      <table class="data-table">
+        <thead><tr><th>Unit ID</th><th>Blood</th><th>Volume</th><th>Source</th><th>Collected</th><th>Expiry</th><th>Action</th></tr></thead>
+        <tbody>
+        {% for u in expiring_soon %}
+        <tr class="row-warn">
+          <td><code>{{ u.unit_uid }}</code></td>
+          <td><span class="bg-badge">{{ u.blood_group }}</span></td>
+          <td>{{ u.volume_ml }}ml</td>
+          <td>{{ u.source|capitalize }}</td>
+          <td>{{ u.collection_date }}</td>
+          <td><strong class="text-warn">{{ u.expiry_date }}</strong></td>
+          <td>
+            {% if current_user.is_verified %}
+            <form class="inline-form" method="POST" action="{{ url_for('bb_update_unit', unit_id=u.id) }}">
+              <input type="hidden" name="status" value="Discarded">
+              <input type="text" name="discard_reason" placeholder="Discard reason" class="form-control form-control-sm">
+              <button class="btn btn-xs btn-danger">🗑️ Discard</button>
+            </form>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- All units table -->
+  <div class="panel glass mt-2">
+    <div class="panel-header"><h2>🔗 All My Blood Units — Full Ledger</h2></div>
+    {% if bb_units %}
+    <div class="table-wrap">
+      <table class="data-table">
+        <thead><tr><th>Unit ID</th><th>Blood</th><th>Vol</th><th>Source</th><th>Collected</th><th>Expiry</th><th>Status</th><th>Notes</th><th>Action</th></tr></thead>
+        <tbody>
+        {% for u in bb_units %}
+        <tr {% if u.expiry_date < today %}class="row-expired"{% elif u.expiry_date <= warning_date %}class="row-warn"{% endif %}>
+          <td><code>{{ u.unit_uid }}</code></td>
+          <td><span class="bg-badge">{{ u.blood_group }}</span></td>
+          <td>{{ u.volume_ml }}ml</td>
+          <td>{{ u.source|capitalize }}</td>
+          <td>{{ u.collection_date }}</td>
+          <td>
+            {% if u.expiry_date < today %}<span class="text-danger">{{ u.expiry_date }} 🗑️</span>
+            {% elif u.expiry_date <= warning_date %}<span class="text-warn">{{ u.expiry_date }} ⚠️</span>
+            {% else %}{{ u.expiry_date }}{% endif %}
+          </td>
+          <td><span class="status-pill status-{{ u.status|lower }}">{{ u.status }}</span></td>
+          <td class="text-muted">{{ (u.notes or '—')[:30] }}</td>
+          <td>
+            {% if current_user.is_verified and u.status == 'Available' %}
+            <form class="inline-form" method="POST" action="{{ url_for('bb_update_unit', unit_id=u.id) }}">
+              <select name="status" class="form-control form-control-sm">
+                <option value="Used">Used</option>
+                <option value="Discarded">Discarded</option>
+                <option value="Expired">Expired</option>
+              </select>
+              <input type="text" name="discard_reason" placeholder="Reason" class="form-control form-control-sm">
+              <button class="btn btn-xs btn-outline">Update</button>
+            </form>
+            {% elif u.status != 'Available' %}
+            <span class="text-muted">{{ u.discard_reason or '—' }}</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="empty-state">No units logged yet. Use the form above to add your first collection.</div>
+    {% endif %}
+  </div>
+
+</div><!-- end tab-inventory -->
+
+<!-- ===== TAB 3: DONOR DIRECTORY ===== -->
+<div id="tab-donors" class="tab-content" style="display:none">
+
+  <div class="panel glass mt-2">
+    <div class="panel-header">
+      <h2>🧑‍⚕️ Donor Directory <span class="badge badge-info">Anonymized</span></h2>
+    </div>
+    <div class="privacy-notice">
+      🔒 <strong>Privacy Policy:</strong> Donor identities are protected. Only blood group, general area, and availability status are shown in compliance with data privacy regulations.
+    </div>
+    {% if donors_anon %}
+    <div class="table-wrap">
+      <table class="data-table">
+        <thead><tr><th>Blood Group</th><th>Area / Region</th><th>Availability</th><th>Rare Type</th></tr></thead>
+        <tbody>
+        {% for d in donors_anon %}
+        <tr>
+          <td><span class="bg-badge">{{ d.blood_group }}</span></td>
+          <td>{{ d.city_area or 'Unknown Area' }}</td>
+          <td>
+            {% if d.is_available %}<span class="badge badge-success">✅ Available</span>
+            {% else %}<span class="badge badge-secondary">⛔ Unavailable</span>{% endif %}
+          </td>
+          <td>{% if d.is_rare %}<span class="badge badge-danger">⭐ Rare</span>{% else %}—{% endif %}</td>
+        </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <p class="text-muted mt-1" style="font-size:0.8rem">
+      Showing {{ donors_anon|length }} verified donors. Contact admin to request coordination for specific donations.
+    </p>
+    {% else %}
+    <div class="empty-state">No verified donors in the system yet.</div>
+    {% endif %}
+  </div>
+
+  <!-- Donor stats by blood group -->
+  <div class="panel glass mt-2">
+    <div class="panel-header"><h2>📊 Available Donors by Blood Group</h2></div>
+    <div class="blood-grid">
+      {% for bg in blood_groups %}
+      {% set bg_donors = donors_anon | selectattr('blood_group', 'equalto', bg) | selectattr('is_available', 'equalto', 1) | list %}
+      <div class="blood-card {% if bg_donors|length == 0 %}blood-card-low{% elif bg_donors|length < 3 %}blood-card-warn{% else %}blood-card-ok{% endif %}">
+        <div class="bg-type">{{ bg }}</div>
+        <div class="bg-units">{{ bg_donors|length }}</div>
+        <div class="bg-label">donors</div>
+        <div class="bg-status">{% if bg_donors|length == 0 %}❌ None{% elif bg_donors|length < 3 %}⚠️ Low{% else %}✅ OK{% endif %}</div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+
+</div><!-- end tab-donors -->
+
+<!-- ===== TAB 4: REPORTS & INCIDENTS ===== -->
+<div id="tab-reports" class="tab-content" style="display:none">
+
+  <!-- Submit incident report -->
+  <div class="panel glass mt-2">
+    <div class="panel-header"><h2>🚨 Submit Incident Report / Suggestion</h2></div>
+    <form method="POST" action="{{ url_for('bb_incident_report') }}" class="auth-form">
+      <div class="form-row">
+        <div class="form-group">
+          <label>Report Type</label>
+          <select name="report_type" class="form-control">
+            <option value="Incident">Incident</option>
+            <option value="Quality Issue">Quality Issue</option>
+            <option value="Storage Problem">Storage Problem</option>
+            <option value="Compliance">Compliance Issue</option>
+            <option value="Suggestion">Suggestion</option>
+            <option value="Other">Other</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Severity</label>
+          <select name="severity" class="form-control">
+            <option value="Low">Low</option>
+            <option value="Medium">Medium</option>
+            <option value="High">High</option>
+            <option value="Critical">Critical</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Title</label>
+        <input type="text" name="title" placeholder="Brief summary of the issue" class="form-control" required>
+      </div>
+      <div class="form-group">
+        <label>Description</label>
+        <textarea name="description" rows="4" placeholder="Detailed description, steps taken, impact…" class="form-control" required></textarea>
+      </div>
+      <button class="btn btn-primary">📤 Submit Report</button>
+    </form>
+  </div>
+
+  <!-- My past reports -->
+  <div class="panel glass mt-2">
+    <div class="panel-header"><h2>📁 My Submitted Reports</h2></div>
+    {% if my_incidents %}
+    <div class="table-wrap">
+      <table class="data-table">
+        <thead><tr><th>#</th><th>Type</th><th>Title</th><th>Severity</th><th>Status</th><th>Submitted</th><th>Admin Note</th></tr></thead>
+        <tbody>
+        {% for r in my_incidents %}
+        <tr>
+          <td>#{{ r.id }}</td>
+          <td>{{ r.report_type }}</td>
+          <td>{{ r.title }}</td>
+          <td><span class="priority-badge priority-{{ r.severity|lower }}">{{ r.severity }}</span></td>
+          <td><span class="status-pill status-{{ r.status|lower }}">{{ r.status }}</span></td>
+          <td>{{ r.created_at[:10] }}</td>
+          <td class="text-muted">{{ r.admin_note or '—' }}</td>
+        </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="empty-state">No reports submitted yet.</div>
+    {% endif %}
+  </div>
+
+</div><!-- end tab-reports -->
+
+<style>
+.tab-bar { display:flex; gap:0.5rem; border-bottom:2px solid rgba(255,255,255,0.1); }
+.tab-btn { background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.15); color:#ccc;
+  padding:0.6rem 1.2rem; border-radius:8px 8px 0 0; cursor:pointer; font-size:0.92rem;
+  transition:all 0.2s; display:flex; align-items:center; gap:0.4rem; }
+.tab-btn:hover { background:rgba(255,255,255,0.1); color:#fff; }
+.tab-btn.active { background:linear-gradient(135deg,rgba(220,38,38,0.4),rgba(185,28,28,0.3));
+  border-color:rgba(220,38,38,0.5); color:#fff; font-weight:600; }
+.tab-badge { background:#dc2626; color:#fff; border-radius:50%; width:1.3rem; height:1.3rem;
+  display:inline-flex; align-items:center; justify-content:center; font-size:0.7rem; font-weight:700; }
+.tab-content { animation: fadeIn 0.25s ease; }
+@keyframes fadeIn { from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none} }
+.privacy-notice { background:rgba(59,130,246,0.1); border:1px solid rgba(59,130,246,0.3);
+  border-radius:8px; padding:0.75rem 1rem; margin-bottom:1rem; color:#93c5fd; font-size:0.88rem; }
+.alert-banner { padding:0.75rem 1.2rem; border-radius:8px; margin-bottom:1rem; font-size:0.9rem; }
+.alert-warning { background:rgba(251,191,36,0.15); border:1px solid rgba(251,191,36,0.4); color:#fbbf24; }
+.ms-2 { margin-left:0.5rem; }
+.mt-1 { margin-top:0.5rem; }
+</style>
+
+<script>
+function switchTab(name, btn) {
+  document.querySelectorAll('.tab-content').forEach(t => t.style.display = 'none');
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('tab-' + name).style.display = 'block';
+  btn.classList.add('active');
+  if (name === 'overview') initCharts();
+}
+function toggleBbReject(id) {
+  const f = document.getElementById('bbr-' + id);
+  f.style.display = f.style.display === 'none' ? 'flex' : 'none';
+}
+function toggleInvEdit(bg) {
+  const el = document.getElementById('inv-edit-' + bg);
+  if (!el) return;
+  el.style.display = el.style.display === 'none' ? 'block' : 'none';
+}
+let chartsInit = false;
+function initCharts() {
+  if (chartsInit) return; chartsInit = true;
+  fetch('/api/bb-inventory').then(r => r.json()).then(d => {
+    new Chart(document.getElementById('bbOwnInvChart').getContext('2d'), {
+      type: 'bar',
+      data: { labels: d.labels, datasets: [
+        { label: 'Available Units', data: d.units, backgroundColor: 'rgba(220,38,38,0.75)', borderRadius:6 },
+        { label: 'Threshold', data: d.thresholds, backgroundColor: 'rgba(251,191,36,0.4)', borderRadius:6 }
+      ]},
+      options: { responsive:true, plugins:{legend:{labels:{color:'#ccc'}}},
+        scales:{ x:{ticks:{color:'#aaa'}}, y:{ticks:{color:'#aaa'},beginAtZero:true} } }
+    });
+    const statusColors = ['rgba(16,185,129,0.8)','rgba(59,130,246,0.8)','rgba(107,114,128,0.8)','rgba(239,68,68,0.8)'];
+    new Chart(document.getElementById('bbStatusChart').getContext('2d'), {
+      type: 'doughnut',
+      data: { labels: d.statuses.labels, datasets:[{
+        data: d.statuses.counts, backgroundColor: statusColors, borderWidth:2, borderColor:'rgba(0,0,0,0.3)'
+      }]},
+      options: { responsive:true, cutout:'60%', plugins:{legend:{labels:{color:'#ccc'}}} }
+    });
+  });
+}
+document.addEventListener('DOMContentLoaded', () => {
+  initCharts();
+  document.querySelectorAll('.kpi-num[data-count]').forEach(el => {
+    const target = parseInt(el.dataset.count)||0; let cur=0;
+    const step = Math.ceil(target/40);
+    const t = setInterval(()=>{ cur=Math.min(cur+step,target); el.textContent=cur; if(cur>=target)clearInterval(t); },30);
+  });
+});
+</script>
+{% endblock %}

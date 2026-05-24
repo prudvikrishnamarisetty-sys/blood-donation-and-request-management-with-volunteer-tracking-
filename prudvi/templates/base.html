@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{% block title %}BloodFlow{% endblock %} — BloodFlow</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="{{ url_for('static',filename='css/style.css') }}">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" defer></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js" defer></script>
+<script src="{{ url_for('static',filename='js/main.js') }}" defer></script>
+</head>
+<body class="{% if current_user %}role-{{ current_user.role }}{% endif %}">
+
+
+<!-- Navbar -->
+<nav class="navbar">
+  <a href="{{ url_for('index') }}" class="nav-brand">
+    <span class="brand-icon">🩸</span>
+    <span class="brand-text">BloodFlow</span>
+  </a>
+  <div class="nav-links">
+    {% if current_user %}
+
+      <a href="{{ url_for('dashboard') }}" class="nav-link {% if request.endpoint=='dashboard' %}active{% endif %}">
+        <span>📊</span> Dashboard
+      </a>
+      {% if current_user.role == 'admin' %}
+      <a href="{{ url_for('admin_users') }}" class="nav-link {% if request.endpoint=='admin_users' %}active{% endif %}">
+        <span>👥</span> Users
+      </a>
+      {% endif %}
+      <div class="nav-notif">
+        <a href="{{ url_for('notifications') }}" class="notif-btn" id="notifBtn">
+          🔔
+          {% if notification_count > 0 %}<span class="notif-badge">{{ notification_count }}</span>{% endif %}
+        </a>
+        {% if top_notifications %}
+        <div class="notif-dropdown" id="notifDropdown">
+          {% for n in top_notifications %}
+          <div class="notif-item {% if not n.is_read %}unread{% endif %} ntype-{{ n.ntype or 'info' }}">
+            <span class="notif-title">{{ n.title }}</span>
+            <span class="notif-msg">{{ n.message[:80] }}{% if n.message|length > 80 %}...{% endif %}</span>
+            <span class="notif-time">{{ n.created_at[:16] }}</span>
+          </div>
+          {% endfor %}
+          <a href="{{ url_for('notifications') }}" class="notif-see-all">See all notifications →</a>
+        </div>
+        {% endif %}
+      </div>
+      <div class="nav-user">
+        <span class="user-avatar role-badge-{{ current_user.role }}">{{ current_user.full_name[0] }}</span>
+        <div class="user-menu">
+          <span class="user-name">{{ current_user.full_name }}</span>
+          <span class="user-role">{{ current_user.role|capitalize }}</span>
+          <a href="{{ url_for('edit_profile') }}" class="um-link">✏️ Edit Profile</a>
+          <a href="{{ url_for('logout') }}" class="um-link danger">🚪 Logout</a>
+        </div>
+      </div>
+    {% else %}
+      <a href="{{ url_for('login') }}" class="btn btn-outline">Sign In</a>
+      <a href="{{ url_for('register') }}" class="btn btn-primary">Register</a>
+    {% endif %}
+  </div>
+</nav>
+
+<!-- Flash messages -->
+<div class="flash-container">
+{% with messages = get_flashed_messages(with_categories=true) %}
+  {% for cat, msg in messages %}
+  <div class="flash flash-{{ cat }}" onclick="this.remove()">
+    <span>{{ msg }}</span><button class="flash-close">×</button>
+  </div>
+  {% endfor %}
+{% endwith %}
+</div>
+
+<main class="main-content">{% block content %}{% endblock %}</main>
+
+<footer class="footer">
+  <div class="footer-inner">
+    <span>🩸 BloodFlow — Connecting Lives</span>
+    <span>Blood Bank Management System © 2024</span>
+  </div>
+</footer>
+
+<script>
+const notifBtn = document.getElementById('notifBtn');
+const notifDropdown = document.getElementById('notifDropdown');
+if (notifBtn && notifDropdown) {
+  notifBtn.addEventListener('click', e => { e.preventDefault(); notifDropdown.classList.toggle('show'); });
+  document.addEventListener('click', e => { if (!notifBtn.contains(e.target)) notifDropdown.classList.remove('show'); });
+}
+setTimeout(() => { document.querySelectorAll('.flash').forEach(f => f.remove()); }, 5000);
+</script>
+</body>
+</html>

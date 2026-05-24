@@ -1,0 +1,93 @@
+{% extends "base.html" %}
+{% block title %}{{ bb.full_name }} — Inventory{% endblock %}
+{% block content %}
+<div class="dashboard-header">
+  <h1>🏦 {{ bb.full_name }}</h1>
+  <p class="dash-sub">
+    📍 {{ bb.address or 'Address not set' }}
+    {% if bb.phone %}&nbsp;·&nbsp;📞 {{ bb.phone }}{% endif %}
+    {% if bb.org_reg_no %}&nbsp;·&nbsp;Reg: {{ bb.org_reg_no }}{% endif %}
+  </p>
+  <a href="{{ url_for('dashboard') }}" class="btn btn-sm btn-outline" style="margin-top:0.5rem">← Back to Dashboard</a>
+</div>
+
+<!-- Inventory Grid -->
+<div class="panel glass mt-2">
+  <div class="panel-header"><h2>📦 Blood Inventory by Group</h2>
+    <span class="badge badge-info">Read-only view</span>
+  </div>
+  {% if bb_inv %}
+  <div class="blood-grid">
+    {% for item in bb_inv %}
+    <div class="blood-card {% if item.units <= item.threshold_units %}blood-card-low{% elif item.units <= item.threshold_units*1.5 %}blood-card-warn{% else %}blood-card-ok{% endif %}">
+      <div class="bg-type">{{ item.blood_group }}</div>
+      <div class="bg-units">{{ item.units }}</div>
+      <div class="bg-label">units</div>
+      {% set bar_width = item.units * 2 if item.units * 2 < 100 else 100 %}
+      <div class="bg-bar"><div class="bg-bar-fill" style="width:{{ bar_width }}%"></div></div>
+      <div class="bg-status">{% if item.units <= item.threshold_units %}⚠️ Low{% elif item.units <= item.threshold_units*1.5 %}⚡ Fair{% else %}✅ Good{% endif %}</div>
+      <div class="bg-threshold">Threshold: {{ item.threshold_units }}</div>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="empty-state">No inventory records found for this blood bank.</div>
+  {% endif %}
+</div>
+
+<!-- Expiring Soon -->
+{% if expiring_soon %}
+<div class="panel glass mt-2 panel-warn">
+  <div class="panel-header"><h2>⚠️ Units Expiring Within 7 Days</h2></div>
+  <div class="table-wrap">
+    <table class="data-table">
+      <thead><tr><th>Unit ID</th><th>Blood Group</th><th>Volume</th><th>Collected</th><th>Expiry</th><th>Status</th></tr></thead>
+      <tbody>
+      {% for u in expiring_soon %}
+      <tr class="row-warn">
+        <td><code>{{ u.unit_uid }}</code></td>
+        <td><span class="bg-badge">{{ u.blood_group }}</span></td>
+        <td>{{ u.volume_ml }}ml</td>
+        <td>{{ u.collection_date }}</td>
+        <td><strong class="text-warn">{{ u.expiry_date }}</strong></td>
+        <td><span class="status-pill status-{{ u.status|lower }}">{{ u.status }}</span></td>
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
+<!-- All Blood Units -->
+<div class="panel glass mt-2">
+  <div class="panel-header"><h2>🔗 All Blood Units</h2></div>
+  {% if bb_units %}
+  <div class="table-wrap">
+    <table class="data-table">
+      <thead><tr><th>Unit ID</th><th>Blood</th><th>Volume</th><th>Source</th><th>Donor</th><th>Collected</th><th>Expiry</th><th>Status</th></tr></thead>
+      <tbody>
+      {% for u in bb_units %}
+      <tr {% if u.expiry_date < today %}class="row-expired"{% elif u.expiry_date <= warning_date %}class="row-warn"{% endif %}>
+        <td><code>{{ u.unit_uid }}</code></td>
+        <td><span class="bg-badge">{{ u.blood_group }}</span></td>
+        <td>{{ u.volume_ml }}ml</td>
+        <td>{{ u.source|capitalize }}</td>
+        <td>{{ u.donor_name or '—' }}</td>
+        <td>{{ u.collection_date }}</td>
+        <td>
+          {% if u.expiry_date < today %}<span class="text-danger">{{ u.expiry_date }} 🗑️</span>
+          {% elif u.expiry_date <= warning_date %}<span class="text-warn">{{ u.expiry_date }} ⚠️</span>
+          {% else %}{{ u.expiry_date }}{% endif %}
+        </td>
+        <td><span class="status-pill status-{{ u.status|lower }}">{{ u.status }}</span></td>
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="empty-state">No blood units recorded for this blood bank.</div>
+  {% endif %}
+</div>
+{% endblock %}

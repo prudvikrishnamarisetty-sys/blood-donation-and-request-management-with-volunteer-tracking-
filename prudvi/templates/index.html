@@ -1,0 +1,97 @@
+{% extends "base.html" %}
+{% block title %}Home{% endblock %}
+{% block content %}
+<!-- Hero -->
+<section class="hero">
+  <div class="hero-bg-anim"></div>
+  <div class="hero-content">
+    <div class="hero-badge">🩸 India's Leading Blood Bank Network</div>
+    <h1 class="hero-title">Every Drop<br><span class="gradient-text">Saves a Life</span></h1>
+    <p class="hero-sub">Connecting donors, hospitals, and volunteers through a smart, real-time blood bank management system.</p>
+    <div class="hero-actions">
+      {% if current_user %}
+        <a href="{{ url_for('dashboard') }}" class="btn btn-primary btn-lg">Go to Dashboard →</a>
+        <a href="{{ url_for('dashboard') }}" class="btn btn-outline btn-lg">🏦 My Dashboard</a>
+      {% else %}
+        <a href="{{ url_for('register') }}" class="btn btn-primary btn-lg">Join as Donor</a>
+        <a href="{{ url_for('login') }}" class="btn btn-outline btn-lg">Sign In</a>
+      {% endif %}
+    </div>
+    <div class="hero-stats">
+      <div class="hstat"><span class="hstat-num" data-count="{{ stats.donors }}">0</span><span>Donors</span></div>
+      <div class="hstat-div"></div>
+      <div class="hstat"><span class="hstat-num" data-count="{{ stats.blood_banks }}">0</span><span>Blood Banks</span></div>
+      <div class="hstat-div"></div>
+      <div class="hstat"><span class="hstat-num" data-count="{{ stats.completed }}">0</span><span>Lives Saved</span></div>
+      <div class="hstat-div"></div>
+      <div class="hstat"><span class="hstat-num" data-count="{{ stats.hospitals }}">0</span><span>Hospitals</span></div>
+    </div>
+  </div>
+  <div class="hero-visual">
+    <div class="blood-drop-container">
+      <div class="blood-drop"></div>
+      <div class="pulse-ring r1"></div>
+      <div class="pulse-ring r2"></div>
+      <div class="pulse-ring r3"></div>
+    </div>
+  </div>
+</section>
+
+<!-- How It Works -->
+<section class="section section-alt">
+  <div class="section-header"><h2>How BloodFlow Works</h2></div>
+  <div class="flow-grid">
+    <div class="flow-step">
+      <div class="flow-icon donor-bg">🧑‍⚕️</div>
+      <h3>Donor</h3>
+      <p>Register, complete medical eligibility check, and schedule your donation. Your blood group is matched to urgent requests.</p>
+      <div class="flow-arrow">↓</div>
+    </div>
+    <div class="flow-step">
+      <div class="flow-icon bank-bg">🏦</div>
+      <h3>Blood Bank</h3>
+      <p>Central hub: collects, stores, tracks every blood unit with expiry dates and chain of custody. Updates inventory in real-time.</p>
+      <div class="flow-arrow">↓</div>
+    </div>
+    <div class="flow-step">
+      <div class="flow-icon vol-bg">🚗</div>
+      <h3>Volunteer</h3>
+      <p>Accepts transport assignments, picks up blood units from the blood bank, and delivers to hospitals. GPS tracked throughout.</p>
+      <div class="flow-arrow">↓</div>
+    </div>
+    <div class="flow-step">
+      <div class="flow-icon hosp-bg">🏥</div>
+      <h3>Hospital</h3>
+      <p>Submits priority blood requests, tracks real-time volunteer location, confirms receipt, and provides feedback.</p>
+    </div>
+  </div>
+  <div class="admin-note">
+    <span>👨‍💼 <strong>Admin</strong> supervises the entire system — approves requests, manages inventory, assigns volunteers, and generates analytics.</span>
+  </div>
+</section>
+
+<!-- Recent Requests -->
+<section class="section">
+  <div class="section-header"><h2>Active Blood Requests</h2></div>
+  <div class="requests-grid">
+    {% for req in recent_requests %}
+    <div class="req-card priority-{{ req.priority|lower }}">
+      <div class="req-header">
+        <span class="req-bg">{{ req.blood_group }}</span>
+        <span class="priority-badge priority-{{ req.priority|lower }}">{{ req.priority }}</span>
+      </div>
+      <div class="req-body">
+        <div class="req-info"><strong>{{ req.patient_name or 'Patient' }}</strong></div>
+        <div class="req-info">🏥 {{ req.hospital_name }}</div>
+        <div class="req-info">📦 {{ req.units }} unit(s)</div>
+        <div class="req-info">📍 {{ req.location or 'N/A' }}</div>
+      </div>
+      <div class="req-footer">
+        <span class="status-pill status-{{ req.status|lower }}">{{ req.status }}</span>
+        <span class="req-time">{{ req.created_at[:10] }}</span>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+</section>
+{% endblock %}

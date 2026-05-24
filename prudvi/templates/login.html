@@ -1,0 +1,552 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sign In — BloodFlow</title>
+  <meta name="description" content="Sign in to BloodFlow — India's intelligent blood donation and logistics platform.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --crimson:   #c0112b;
+      --crimson-d: #8b0c1e;
+      --crimson-l: #e8294a;
+      --rose:      #ff4d6d;
+      --bg:        #0d0d12;
+      --surface:   #16161e;
+      --surface2:  #1e1e2a;
+      --border:    rgba(255,255,255,0.07);
+      --text:      #f0f0f5;
+      --muted:     #888899;
+      --accent:    #c0112b;
+      --radius:    16px;
+      --transition: 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    html, body {
+      height: 100%;
+      font-family: 'Inter', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      overflow: hidden;
+    }
+
+    /* ── Layout ─────────────────────────────────────────────────── */
+    .page {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      height: 100vh;
+    }
+
+    /* ── Left Panel ─────────────────────────────────────────────── */
+    .panel-left {
+      position: relative;
+      background: linear-gradient(145deg, #1a0009 0%, #300010 40%, #0d0005 100%);
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: flex-start;
+      padding: 4rem;
+      overflow: hidden;
+    }
+
+    .panel-left::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background:
+        radial-gradient(circle at 20% 30%, rgba(192,17,43,0.35) 0%, transparent 55%),
+        radial-gradient(circle at 80% 80%, rgba(192,17,43,0.15) 0%, transparent 50%);
+      pointer-events: none;
+    }
+
+    /* Decorative blood drop rings */
+    .rings {
+      position: absolute;
+      top: 50%;
+      right: -8rem;
+      transform: translateY(-50%);
+      width: 26rem;
+      height: 26rem;
+      pointer-events: none;
+    }
+    .ring {
+      position: absolute;
+      border-radius: 50%;
+      border: 1px solid rgba(192,17,43,0.25);
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+    }
+    .ring:nth-child(1){ width: 9rem;  height: 9rem;  background: rgba(192,17,43,0.18); animation: pulse 3s ease-in-out infinite; }
+    .ring:nth-child(2){ width: 15rem; height: 15rem; animation: pulse 3s ease-in-out infinite 0.6s; }
+    .ring:nth-child(3){ width: 21rem; height: 21rem; animation: pulse 3s ease-in-out infinite 1.2s; }
+    .ring:nth-child(4){ width: 26rem; height: 26rem; animation: pulse 3s ease-in-out infinite 1.8s; }
+    @keyframes pulse {
+      0%, 100% { opacity: 0.5; transform: translate(-50%,-50%) scale(1); }
+      50%       { opacity: 1;   transform: translate(-50%,-50%) scale(1.04); }
+    }
+
+    .drop-icon {
+      font-size: 4.5rem;
+      margin-bottom: 1.5rem;
+      filter: drop-shadow(0 0 32px rgba(192,17,43,0.7));
+      animation: float 4s ease-in-out infinite;
+    }
+    @keyframes float {
+      0%, 100% { transform: translateY(0); }
+      50%       { transform: translateY(-10px); }
+    }
+
+    .brand-name {
+      font-family: 'Playfair Display', serif;
+      font-size: 3rem;
+      font-weight: 700;
+      color: var(--text);
+      letter-spacing: -0.02em;
+      line-height: 1;
+      margin-bottom: 0.5rem;
+    }
+    .brand-name span { color: var(--crimson); }
+
+    .brand-tagline {
+      font-size: 1rem;
+      color: var(--muted);
+      font-weight: 400;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      margin-bottom: 3rem;
+    }
+
+    .stats-row {
+      display: flex;
+      gap: 2.5rem;
+      margin-bottom: 3rem;
+    }
+    .stat { display: flex; flex-direction: column; gap: 0.2rem; }
+    .stat-val {
+      font-size: 1.6rem;
+      font-weight: 700;
+      color: var(--text);
+    }
+    .stat-label {
+      font-size: 0.72rem;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+
+    .feature-list { display: flex; flex-direction: column; gap: 1rem; }
+    .feature-item {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      font-size: 0.88rem;
+      color: #ccccd0;
+      opacity: 0;
+      transform: translateX(-20px);
+      animation: slideIn 0.5s forwards;
+    }
+    .feature-item:nth-child(1){ animation-delay: 0.2s; }
+    .feature-item:nth-child(2){ animation-delay: 0.35s; }
+    .feature-item:nth-child(3){ animation-delay: 0.5s; }
+    .feature-item:nth-child(4){ animation-delay: 0.65s; }
+    @keyframes slideIn {
+      to { opacity: 1; transform: translateX(0); }
+    }
+    .feature-dot {
+      width: 28px; height: 28px; border-radius: 8px;
+      background: rgba(192,17,43,0.2);
+      border: 1px solid rgba(192,17,43,0.4);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 0.85rem; flex-shrink: 0;
+    }
+
+    /* ── Right Panel ─────────────────────────────────────────────── */
+    .panel-right {
+      background: var(--surface);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 3rem;
+      overflow-y: auto;
+    }
+
+    .auth-box {
+      width: 100%;
+      max-width: 400px;
+      animation: fadeUp 0.5s ease forwards;
+    }
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(24px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    .auth-header { margin-bottom: 2.5rem; }
+    .auth-header h1 {
+      font-family: 'Playfair Display', serif;
+      font-size: 2.1rem;
+      font-weight: 700;
+      color: var(--text);
+      margin-bottom: 0.4rem;
+    }
+    .auth-header p {
+      font-size: 0.9rem;
+      color: var(--muted);
+    }
+
+    /* Flashes */
+    .flash-wrap { margin-bottom: 1rem; }
+    .flash {
+      padding: 0.7rem 1rem;
+      border-radius: 10px;
+      font-size: 0.85rem;
+      margin-bottom: 0.5rem;
+      border-left: 3px solid;
+    }
+    .flash-danger  { background: rgba(192,17,43,0.12); border-color: var(--crimson); color: #f8a0a0; }
+    .flash-success { background: rgba(34,197,94,0.1);  border-color: #22c55e; color: #86efac; }
+    .flash-warning { background: rgba(251,191,36,0.1); border-color: #fbbf24; color: #fde68a; }
+    .flash-info    { background: rgba(99,102,241,0.1); border-color: #6366f1; color: #c7d2fe; }
+
+    /* Form */
+    .form-group { margin-bottom: 1.4rem; }
+    label {
+      display: block;
+      font-size: 0.8rem;
+      font-weight: 500;
+      color: var(--muted);
+      margin-bottom: 0.5rem;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+
+    .input-wrap { position: relative; }
+    .input-icon {
+      position: absolute;
+      left: 1rem; top: 50%;
+      transform: translateY(-50%);
+      font-size: 1rem;
+      pointer-events: none;
+      opacity: 0.5;
+    }
+
+    input[type="email"],
+    input[type="password"],
+    input[type="text"] {
+      width: 100%;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 0.85rem 1rem 0.85rem 2.8rem;
+      color: var(--text);
+      font-size: 0.95rem;
+      font-family: 'Inter', sans-serif;
+      outline: none;
+      transition: border-color var(--transition), box-shadow var(--transition), background var(--transition);
+    }
+    input:focus {
+      border-color: var(--crimson);
+      background: rgba(30,30,42,0.9);
+      box-shadow: 0 0 0 3px rgba(192,17,43,0.15);
+    }
+    input::placeholder { color: rgba(136,136,153,0.5); }
+
+    .pw-toggle {
+      position: absolute;
+      right: 1rem; top: 50%;
+      transform: translateY(-50%);
+      background: none;
+      border: none;
+      cursor: pointer;
+      font-size: 1rem;
+      opacity: 0.4;
+      transition: opacity 0.2s;
+      color: var(--text);
+      padding: 0.2rem;
+    }
+    .pw-toggle:hover { opacity: 0.9; }
+
+    .btn-signin {
+      width: 100%;
+      padding: 0.95rem;
+      border-radius: 12px;
+      border: none;
+      font-size: 0.95rem;
+      font-weight: 600;
+      font-family: 'Inter', sans-serif;
+      cursor: pointer;
+      letter-spacing: 0.03em;
+      background: linear-gradient(135deg, var(--crimson) 0%, var(--crimson-d) 100%);
+      color: #fff;
+      position: relative;
+      overflow: hidden;
+      transition: transform var(--transition), box-shadow var(--transition);
+      box-shadow: 0 4px 24px rgba(192,17,43,0.35);
+      margin-top: 0.5rem;
+    }
+    .btn-signin::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(135deg, rgba(255,255,255,0.12) 0%, transparent 60%);
+      opacity: 0;
+      transition: opacity 0.3s;
+    }
+    .btn-signin:hover { transform: translateY(-2px); box-shadow: 0 8px 36px rgba(192,17,43,0.5); }
+    .btn-signin:hover::before { opacity: 1; }
+    .btn-signin:active { transform: translateY(0); }
+
+    /* Ripple effect */
+    .btn-signin .ripple {
+      position: absolute;
+      border-radius: 50%;
+      background: rgba(255,255,255,0.3);
+      width: 0; height: 0;
+      transform: translate(-50%, -50%);
+      animation: ripple 0.6s linear;
+      pointer-events: none;
+    }
+    @keyframes ripple {
+      to { width: 300px; height: 300px; opacity: 0; }
+    }
+
+    .btn-loading { pointer-events: none; opacity: 0.8; }
+    .btn-loading::after {
+      content: '';
+      display: inline-block;
+      width: 14px; height: 14px;
+      border: 2px solid rgba(255,255,255,0.5);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      vertical-align: middle;
+      margin-left: 8px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .divider {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      margin: 1.75rem 0;
+      color: var(--muted);
+      font-size: 0.8rem;
+    }
+    .divider::before, .divider::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: var(--border);
+    }
+
+    .register-link {
+      text-align: center;
+      font-size: 0.88rem;
+      color: var(--muted);
+    }
+    .register-link a {
+      color: var(--crimson-l);
+      text-decoration: none;
+      font-weight: 500;
+      transition: color 0.2s;
+    }
+    .register-link a:hover { color: var(--rose); text-decoration: underline; }
+
+    .emergency-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      background: rgba(192,17,43,0.12);
+      border: 1px solid rgba(192,17,43,0.3);
+      border-radius: 100px;
+      padding: 0.4rem 1rem;
+      font-size: 0.75rem;
+      color: #f8a0a0;
+      margin-bottom: 2rem;
+      font-weight: 500;
+    }
+    .emergency-dot {
+      width: 7px; height: 7px;
+      border-radius: 50%;
+      background: var(--rose);
+      animation: blink 1.4s ease-in-out infinite;
+    }
+    @keyframes blink {
+      0%, 100% { opacity: 1; }
+      50%       { opacity: 0.2; }
+    }
+
+    /* ── Responsive ──────────────────────────────────────────────── */
+    @media (max-width: 768px) {
+      html, body { overflow: auto; }
+      .page { grid-template-columns: 1fr; height: auto; }
+      .panel-left {
+        padding: 3rem 2rem 2rem;
+        min-height: auto;
+      }
+      .rings { display: none; }
+      .panel-right { padding: 2rem; }
+    }
+    /* Quick Access CSS removed */
+  </style>
+</head>
+<body>
+
+<div class="page">
+  <!-- LEFT: Brand Panel -->
+  <div class="panel-left">
+    <div class="rings">
+      <div class="ring"></div>
+      <div class="ring"></div>
+      <div class="ring"></div>
+      <div class="ring"></div>
+    </div>
+
+    <div class="drop-icon">🩸</div>
+
+    <div class="brand-name">Blood<span>Flow</span></div>
+    <p class="brand-tagline">Intelligent Blood Logistics</p>
+
+    <div class="stats-row">
+      <div class="stat">
+        <span class="stat-val">10+</span>
+        <span class="stat-label">Hospitals</span>
+      </div>
+      <div class="stat">
+        <span class="stat-val">50+</span>
+        <span class="stat-label">Donors</span>
+      </div>
+      <div class="stat">
+        <span class="stat-val">24/7</span>
+        <span class="stat-label">Active</span>
+      </div>
+    </div>
+
+    <div class="feature-list">
+      <div class="feature-item">
+        <div class="feature-dot">🏥</div>
+        Real-time hospital blood request routing
+      </div>
+      <div class="feature-item">
+        <div class="feature-dot">📍</div>
+        Proximity-based donor and volunteer matching
+      </div>
+      <div class="feature-item">
+        <div class="feature-dot">🏦</div>
+        Live blood bank inventory tracking
+      </div>
+      <div class="feature-item">
+        <div class="feature-dot">🚗</div>
+        Volunteer GPS coordination & task management
+      </div>
+    </div>
+  </div>
+
+  <!-- RIGHT: Sign In Panel -->
+  <div class="panel-right">
+    <div class="auth-box">
+      <div class="emergency-badge">
+        <span class="emergency-dot"></span>
+        Emergency blood network active
+      </div>
+
+      <div class="auth-header">
+        <h1>Welcome back</h1>
+        <p>Sign in to access your BloodFlow dashboard</p>
+      </div>
+
+      <!-- Flash Messages -->
+      {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+        <div class="flash-wrap">
+          {% for cat, msg in messages %}
+          <div class="flash flash-{{ cat }}">{{ msg }}</div>
+          {% endfor %}
+        </div>
+        {% endif %}
+      {% endwith %}
+
+      <!-- Form -->
+      <form method="POST" id="loginForm" novalidate>
+        <div class="form-group">
+          <label for="emailField">Email address</label>
+          <div class="input-wrap">
+            <span class="input-icon">✉️</span>
+            <input type="email" name="email" id="emailField"
+                   placeholder="you@example.com" required autocomplete="email">
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="pwField">Password</label>
+          <div class="input-wrap">
+            <span class="input-icon">🔒</span>
+            <input type="password" name="password" id="pwField"
+                   placeholder="••••••••" required autocomplete="current-password">
+            <button type="button" class="pw-toggle" id="pwToggle"
+                    aria-label="Toggle password visibility">👁</button>
+          </div>
+        </div>
+
+        <button type="submit" class="btn-signin" id="signinBtn">
+          Sign In
+        </button>
+      </form>
+
+      <div class="divider">or</div>
+
+      <!-- Quick Access removed -->
+
+      <div class="divider"></div>
+
+      <p class="register-link">
+        New to BloodFlow? <a href="{{ url_for('register') }}">Create an account →</a>
+      </p>
+    </div>
+  </div>
+</div>
+
+<script>
+// Password toggle
+document.getElementById('pwToggle').addEventListener('click', () => {
+  const f = document.getElementById('pwField');
+  const btn = document.getElementById('pwToggle');
+  f.type = f.type === 'password' ? 'text' : 'password';
+  btn.textContent = f.type === 'password' ? '👁' : '🙈';
+});
+
+// Ripple effect on sign-in button
+document.getElementById('signinBtn').addEventListener('click', function(e) {
+  const ripple = document.createElement('span');
+  ripple.className = 'ripple';
+  const rect = this.getBoundingClientRect();
+  ripple.style.left = (e.clientX - rect.left) + 'px';
+  ripple.style.top  = (e.clientY - rect.top)  + 'px';
+  this.appendChild(ripple);
+  setTimeout(() => ripple.remove(), 700);
+});
+
+// Loading state on submit
+document.getElementById('loginForm').addEventListener('submit', function() {
+  const btn = document.getElementById('signinBtn');
+  btn.classList.add('btn-loading');
+  btn.textContent = 'Signing in';
+});
+
+// Subtle input focus enhancement
+document.querySelectorAll('input').forEach(inp => {
+  inp.addEventListener('focus', () => {
+    inp.closest('.form-group').querySelector('label').style.color = '#e82948';
+  });
+  inp.addEventListener('blur', () => {
+    inp.closest('.form-group').querySelector('label').style.color = '';
+  });
+});
+// Quick Access JS removed
+</script>
+</body>
+</html>

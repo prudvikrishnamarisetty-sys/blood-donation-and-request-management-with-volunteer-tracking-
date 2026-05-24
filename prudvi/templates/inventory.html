@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block title %}Inventory{% endblock %}
+{% block content %}
+<div class="dashboard-header">
+  <h1>📦 Blood Inventory</h1>
+  <p class="dash-sub">Real-time stock by group, expiry status, and wastage overview.</p>
+</div>
+<div class="blood-grid">
+  {% for item in inventory %}
+  <div class="blood-card {% if item.units <= item.threshold_units %}blood-card-low{% elif item.units <= item.threshold_units*1.5 %}blood-card-warn{% else %}blood-card-ok{% endif %}">
+    <div class="bg-type">{{ item.blood_group }}</div>
+    <div class="bg-units">{{ item.units }}</div>
+    <div class="bg-label">units available</div>
+    <div class="bg-bar"><div class="bg-bar-fill" style="width:{{ [item.units*100//50,100]|min }}%"></div></div>
+    <div class="bg-status">{% if item.units <= item.threshold_units %}⚠️ Low Stock{% elif item.units <= item.threshold_units*1.5 %}⚡ Fair{% else %}✅ Good{% endif %}</div>
+    <div class="bg-threshold">Min: {{ item.threshold_units }} units</div>
+    <small class="text-muted">Updated: {{ item.updated_at[:10] }}</small>
+  </div>
+  {% endfor %}
+</div>
+
+<div class="panel glass mt-2">
+  <div class="panel-header"><h2>🩸 All Blood Units</h2></div>
+  <div class="table-wrap">
+    <table class="data-table">
+      <thead><tr><th>Unit ID</th><th>Blood</th><th>Volume</th><th>Source</th><th>Collected</th><th>Expires</th><th>Status</th></tr></thead>
+      <tbody>
+      {% for u in blood_units %}
+      <tr {% if u.expiry_date < today %}class="row-expired"{% elif u.expiry_date <= warning_date %}class="row-warn"{% endif %}>
+        <td><code>{{ u.unit_uid }}</code></td>
+        <td><span class="bg-badge">{{ u.blood_group }}</span></td>
+        <td>{{ u.volume_ml }}ml</td>
+        <td>{{ u.source|capitalize }}</td>
+        <td>{{ u.collection_date }}</td>
+        <td>{% if u.expiry_date < today %}<span class="text-danger">{{ u.expiry_date }}</span>
+            {% elif u.expiry_date <= warning_date %}<span class="text-warn">{{ u.expiry_date }} ⚠️</span>
+            {% else %}{{ u.expiry_date }}{% endif %}</td>
+        <td><span class="status-pill status-{{ u.status|lower }}">{{ u.status }}</span></td>
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

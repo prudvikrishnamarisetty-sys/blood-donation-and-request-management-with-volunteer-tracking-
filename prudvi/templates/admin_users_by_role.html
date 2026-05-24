@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+{% block title %}{{ role|capitalize }}s — Admin{% endblock %}
+{% block content %}
+<div class="dashboard-header">
+  <h1>
+    {% if role == 'donor' %}🧑‍⚕️
+    {% elif role == 'volunteer' %}🚗
+    {% elif role == 'hospital' %}🏥
+    {% elif role == 'blood_bank' %}🏦
+    {% else %}👤{% endif %}
+    All {{ role|replace('_',' ')|title }}s
+  </h1>
+  <p class="dash-sub">{{ users_list|length }} registered user(s) in this category</p>
+</div>
+
+<div class="panel glass">
+  <div class="panel-header">
+    <h2>{{ role|replace('_',' ')|title }} List</h2>
+    <a href="{{ url_for('dashboard') }}" class="btn btn-sm btn-outline">← Back to Dashboard</a>
+  </div>
+  {% if users_list %}
+  <div class="table-wrap">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Name</th>
+          <th>Phone</th>
+          <th>Location</th>
+          {% if role == 'donor' %}<th>Blood Group</th>{% endif %}
+          <th>Status</th>
+          <th>Verified</th>
+          <th>Action</th>
+        </tr>
+      </thead>
+      <tbody>
+      {% for u in users_list %}
+      <tr>
+        <td>{{ loop.index }}</td>
+        <td>
+          <div style="display:flex;align-items:center;gap:0.5rem;">
+            <span class="user-avatar-sm role-badge-{{ u.role }}">{{ u.full_name[0] }}</span>
+            <div>
+              <div style="font-weight:600">{{ u.full_name }}</div>
+              <div style="font-size:0.75rem;color:#888">{{ u.email }}</div>
+            </div>
+          </div>
+        </td>
+        <td>{{ u.phone or '—' }}</td>
+        <td>{{ u.address or '—' }}</td>
+        {% if role == 'donor' %}
+        <td><span class="bg-badge">{{ u.blood_group or '—' }}</span></td>
+        {% endif %}
+        <td>
+          <span class="badge {% if u.is_available %}badge-success{% else %}badge-danger{% endif %}">
+            {% if u.is_available %}Active{% else %}Inactive{% endif %}
+          </span>
+        </td>
+        <td>
+          <span class="badge {% if u.is_verified %}badge-success{% else %}badge-warning{% endif %}">
+            {% if u.is_verified %}Verified{% else %}Pending{% endif %}
+          </span>
+        </td>
+        <td>
+          <a href="{{ url_for('admin_user_profile', uid=u.id) }}" class="btn btn-xs btn-primary">👁 View</a>
+        </td>
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="empty-state">No {{ role|replace('_',' ') }}s registered yet.</div>
+  {% endif %}
+</div>
+{% endblock %}

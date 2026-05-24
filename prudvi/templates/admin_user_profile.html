@@ -1,0 +1,157 @@
+{% extends "base.html" %}
+{% block title %}{{ u.full_name }} — Profile{% endblock %}
+{% block content %}
+<div class="dashboard-header">
+  <h1>👤 User Profile</h1>
+  <p class="dash-sub">Detailed profile for {{ u.full_name }}</p>
+</div>
+
+<div class="dash-grid-2col">
+
+<!-- Profile Card -->
+<div class="panel glass">
+  <div class="panel-header"><h2>📋 Profile Information</h2></div>
+  <div class="profile-card">
+    <div class="profile-avatar">{{ u.full_name[0] }}</div>
+    <div class="profile-name">{{ u.full_name }}</div>
+    <div class="profile-role">
+      <span class="badge role-badge-{{ u.role }}">
+        {% if u.role == 'donor' %}🧑‍⚕️
+        {% elif u.role == 'volunteer' %}🚗
+        {% elif u.role == 'hospital' %}🏥
+        {% elif u.role == 'blood_bank' %}🏦
+        {% elif u.role == 'admin' %}👨‍💼
+        {% endif %}
+        {{ u.role|replace('_',' ')|title }}
+      </span>
+    </div>
+    <div style="display:flex;gap:0.5rem;justify-content:center;margin-top:0.5rem;">
+      <span class="badge {% if u.is_verified %}badge-success{% else %}badge-warning{% endif %}">
+        {% if u.is_verified %}✅ Verified{% else %}⏳ Pending{% endif %}
+      </span>
+      <span class="badge {% if u.is_available %}badge-success{% else %}badge-danger{% endif %}">
+        {% if u.is_available %}🟢 Active{% else %}🔴 Inactive{% endif %}
+      </span>
+    </div>
+  </div>
+
+  <div class="profile-details">
+    <div class="detail-row"><span class="detail-label">Full Name</span><span class="detail-val">{{ u.full_name }}</span></div>
+    <div class="detail-row"><span class="detail-label">Email</span><span class="detail-val">{{ u.email }}</span></div>
+    <div class="detail-row"><span class="detail-label">Phone</span><span class="detail-val">{{ u.phone or '—' }}</span></div>
+    <div class="detail-row"><span class="detail-label">Age</span><span class="detail-val">{{ u.age or '—' }}</span></div>
+    <div class="detail-row"><span class="detail-label">Gender</span><span class="detail-val">{{ u.gender or '—' }}</span></div>
+    {% if u.blood_group %}
+    <div class="detail-row">
+      <span class="detail-label">Blood Group</span>
+      <span class="detail-val"><span class="bg-badge">{{ u.blood_group }}</span></span>
+    </div>
+    {% endif %}
+    <div class="detail-row"><span class="detail-label">Address</span><span class="detail-val">{{ u.address or '—' }}</span></div>
+    {% if u.hospital_type %}
+    <div class="detail-row"><span class="detail-label">Type</span><span class="detail-val">{{ u.hospital_type }}</span></div>
+    {% endif %}
+    {% if u.org_reg_no %}
+    <div class="detail-row"><span class="detail-label">Reg. No</span><span class="detail-val">{{ u.org_reg_no }}</span></div>
+    {% endif %}
+    <div class="detail-row"><span class="detail-label">Registered</span><span class="detail-val">{{ u.created_at[:10] }}</span></div>
+    {% if u.latitude and u.longitude %}
+    <div class="detail-row"><span class="detail-label">Coordinates</span><span class="detail-val">{{ u.latitude }}, {{ u.longitude }}</span></div>
+    {% endif %}
+  </div>
+
+  <div style="display:flex;gap:0.5rem;margin-top:1rem;">
+    <form method="POST" action="{{ url_for('admin_toggle_verify', uid=u.id) }}">
+      <button class="btn btn-sm {% if u.is_verified %}btn-warning{% else %}btn-success{% endif %}">
+        {% if u.is_verified %}Unverify{% else %}Verify{% endif %}
+      </button>
+    </form>
+    <a href="{{ url_for('admin_users') }}" class="btn btn-sm btn-outline">← Back</a>
+  </div>
+</div>
+
+<!-- Activity -->
+<div class="panel glass">
+  <div class="panel-header"><h2>📊 Activity History</h2></div>
+
+  {% if u.role == 'donor' and donations %}
+  <h4 style="color:#ef4444;margin-bottom:0.5rem;">🩸 Recent Donations</h4>
+  <div class="table-wrap">
+    <table class="data-table">
+      <thead><tr><th>Blood</th><th>Units</th><th>Status</th><th>Date</th></tr></thead>
+      <tbody>
+      {% for d in donations %}
+      <tr>
+        <td><span class="bg-badge">{{ d.blood_group }}</span></td>
+        <td>{{ d.units }}</td>
+        <td><span class="badge badge-{{ 'success' if d.status == 'completed' else 'warning' }}">{{ d.status }}</span></td>
+        <td>{{ d.created_at[:10] }}</td>
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% elif u.role == 'donor' %}
+  <div class="empty-state">No donations yet.</div>
+  {% endif %}
+
+  {% if u.role == 'volunteer' and tasks %}
+  <h4 style="color:#3b82f6;margin-bottom:0.5rem;">🚗 Recent Tasks</h4>
+  <div class="table-wrap">
+    <table class="data-table">
+      <thead><tr><th>Request</th><th>Status</th><th>Assigned</th></tr></thead>
+      <tbody>
+      {% for t in tasks %}
+      <tr>
+        <td>#{{ t.request_id }}</td>
+        <td><span class="status-pill status-{{ t.status|lower }}">{{ t.status }}</span></td>
+        <td>{{ t.assigned_at[:10] }}</td>
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% elif u.role == 'volunteer' %}
+  <div class="empty-state">No tasks yet.</div>
+  {% endif %}
+
+  {% if u.role == 'hospital' and requests %}
+  <h4 style="color:#10b981;margin-bottom:0.5rem;">🏥 Recent Blood Requests</h4>
+  <div class="table-wrap">
+    <table class="data-table">
+      <thead><tr><th>Blood</th><th>Units</th><th>Priority</th><th>Status</th><th>Date</th></tr></thead>
+      <tbody>
+      {% for r in requests %}
+      <tr>
+        <td><span class="bg-badge">{{ r.blood_group }}</span></td>
+        <td>{{ r.units }}</td>
+        <td><span class="priority-badge priority-{{ r.priority|lower }}">{{ r.priority }}</span></td>
+        <td><span class="status-pill status-{{ r.status|lower }}">{{ r.status }}</span></td>
+        <td>{{ r.created_at[:10] }}</td>
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% elif u.role == 'hospital' %}
+  <div class="empty-state">No requests yet.</div>
+  {% endif %}
+
+  {% if u.role not in ['donor','volunteer','hospital'] %}
+  <div class="empty-state">No activity data available for this user type.</div>
+  {% endif %}
+</div>
+
+</div>
+
+<style>
+.profile-card { text-align:center; padding:1.5rem 1rem; border-bottom:1px solid rgba(255,255,255,0.08); margin-bottom:1rem; }
+.profile-avatar { width:70px; height:70px; border-radius:50%; background:linear-gradient(135deg,#ef4444,#991b1b); display:flex; align-items:center; justify-content:center; font-size:2rem; font-weight:700; color:#fff; margin:0 auto 0.75rem; }
+.profile-name { font-size:1.3rem; font-weight:700; color:#fff; }
+.profile-role { margin-top:0.4rem; }
+.profile-details { display:flex; flex-direction:column; gap:0.4rem; }
+.detail-row { display:flex; justify-content:space-between; align-items:center; padding:0.4rem 0; border-bottom:1px solid rgba(255,255,255,0.05); }
+.detail-label { color:#aaa; font-size:0.85rem; }
+.detail-val { font-weight:500; color:#fff; }
+</style>
+{% endblock %}

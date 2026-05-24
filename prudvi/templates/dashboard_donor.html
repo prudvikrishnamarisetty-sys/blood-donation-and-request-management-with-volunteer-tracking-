@@ -1,0 +1,211 @@
+{% extends "base.html" %}
+{% block title %}Donor Dashboard{% endblock %}
+{% block content %}
+<div class="dashboard-header">
+  <h1>🧑‍⚕️ Donor Dashboard</h1>
+  <p class="dash-sub">Track your donations, eligibility, and respond to urgent blood requests</p>
+</div>
+
+<!-- Eligibility Banner -->
+{% if not is_eligible and next_eligible %}
+<div class="eligibility-banner ineligible">
+  ⛔ You are not yet eligible to donate. Next eligible date: <strong>{{ next_eligible.strftime('%d %B %Y') }}</strong>
+  <div class="countdown" data-target="{{ next_eligible.isoformat() }}"></div>
+</div>
+{% elif is_eligible %}
+<div class="eligibility-banner eligible">
+  ✅ You are eligible to donate! Schedule your donation below.
+</div>
+{% endif %}
+
+<div class="dash-grid-2col">
+
+<!-- Donation Request Form -->
+<div class="panel glass">
+  <div class="panel-header"><h2>💉 Schedule a Donation (to Hospital)</h2></div>
+  {% if is_eligible %}
+  <form method="POST" action="{{ url_for('donation_request') }}" class="auth-form">
+    <div class="form-group">
+      <label>Preferred Hospital</label>
+      <select name="hospital_id" class="form-control">
+        <option value="">Any hospital (flexible)</option>
+        {% for h in hospitals %}<option value="{{ h.id }}">{{ h.full_name }}</option>{% endfor %}
+      </select>
+    </div>
+    <div class="form-group">
+      <label>Units to Donate</label>
+      <input type="number" name="units" value="1" min="1" max="3" class="form-control">
+    </div>
+    <div class="form-group">
+      <label>Last Donated Date (if applicable)</label>
+      <input type="date" name="last_donated_date" class="form-control">
+    </div>
+    <div class="form-group">
+      <label>Note</label>
+      <input type="text" name="request_note" placeholder="Any notes for the hospital" class="form-control">
+    </div>
+    <div class="compliance-section">
+      <h4>⚕️ Medical Compliance (Required)</h4>
+      <label class="check-label"><input type="checkbox" name="chk_age_weight" required> I am aged 18–65 and weigh over 50kg</label>
+      <label class="check-label"><input type="checkbox" name="chk_tattoos" required> No tattoos or piercings in the last 6 months</label>
+      <label class="check-label"><input type="checkbox" name="chk_symptoms" required> No fever, cold, or illness symptoms</label>
+      <label class="check-label"><input type="checkbox" name="chk_surgery" required> No major surgery in the last 6 months</label>
+    </div>
+    <button class="btn btn-primary btn-block">📅 Submit Donation Request</button>
+  </form>
+  {% else %}
+  <div class="empty-state">⛔ You are not eligible to donate until {{ next_eligible.strftime('%d %B %Y') if next_eligible else 'eligibility confirmed' }}.</div>
+  {% endif %}
+</div>
+
+<!-- My Blood Group Info -->
+<div class="panel glass">
+  <div class="panel-header"><h2>🩸 Your Profile</h2></div>
+  <div class="profile-card">
+    <div class="blood-type-big">{{ current_user.blood_group or 'N/A' }}</div>
+    <div class="profile-details">
+      <div class="profile-row"><span>Name</span><strong>{{ current_user.full_name }}</strong></div>
+      <div class="profile-row"><span>Blood Group</span><strong>{{ current_user.blood_group or 'Not set' }}</strong></div>
+      <div class="profile-row"><span>Age</span><strong>{{ current_user.age or 'Not set' }}</strong></div>
+      <div class="profile-row"><span>Gender</span><strong>{{ current_user.gender or 'Not set' }}</strong></div>
+      <div class="profile-row"><span>Location</span><strong>{{ current_user.address or 'Not set' }}</strong></div>
+      <div class="profile-row"><span>Total Donations</span><strong>{{ history|length }}</strong></div>
+      {% if last_donated %}<div class="profile-row"><span>Last Donated</span><strong>{{ last_donated.donation_date }}</strong></div>{% endif %}
+    </div>
+  </div>
+  <a href="{{ url_for('edit_profile') }}" class="btn btn-outline btn-block mt-1">✏️ Edit Profile</a>
+</div>
+
+</div><!-- end 2col -->
+
+<!-- Donate Blood to Blood Bank -->
+<div class="panel glass mt-2" style="border:1px solid rgba(220,38,38,0.3);background:rgba(220,38,38,0.05);">
+  <div class="panel-header">
+    <h2>🏦 Donate Blood to Blood Bank</h2>
+    <span class="badge badge-danger">Volunteer will coordinate pickup</span>
+  </div>
+  <p style="color:#ccc;font-size:0.9rem;margin-bottom:1rem;">
+    Want to donate directly to a blood bank? Submit a request here. A volunteer will be notified to coordinate your blood pickup and deliver it to the blood bank.
+  </p>
+  {% if is_eligible %}
+  <form method="POST" action="{{ url_for('donor_donate_to_bloodbank') }}" class="auth-form">
+    <div class="form-row">
+      <div class="form-group">
+        <label>Select Blood Bank</label>
+        <select name="blood_bank_id" required class="form-control">
+          <option value="">— Select a blood bank —</option>
+          {% for bb in blood_banks %}
+          <option value="{{ bb.id }}">{{ bb.full_name }} ({{ bb.address or 'Location not set' }})</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Units to Donate</label>
+        <input type="number" name="units" value="1" min="1" max="3" class="form-control">
+      </div>
+    </div>
+    <div class="form-group">
+      <label>Note (optional)</label>
+      <input type="text" name="note" placeholder="Any additional info for the volunteer..." class="form-control">
+    </div>
+    <button class="btn btn-primary">🩸 Send Donation Request to Blood Bank</button>
+  </form>
+  {% else %}
+  <div class="empty-state">⛔ You must be eligible to donate. Next eligible: {{ next_eligible.strftime('%d %B %Y') if next_eligible else 'soon' }}.</div>
+  {% endif %}
+</div>
+
+<!-- Open Requests Matching Blood Group -->
+{% if open_requests %}
+<div class="panel glass mt-2">
+  <div class="panel-header"><h2>🆘 Urgent Blood Requests Matching Your Group</h2></div>
+  <div class="requests-grid">
+    {% for req in open_requests %}
+    <div class="req-card priority-{{ req.priority|lower }}">
+      <div class="req-header">
+        <span class="req-bg">{{ req.blood_group }}</span>
+        <span class="priority-badge priority-{{ req.priority|lower }}">{{ req.priority }}</span>
+      </div>
+      <div class="req-body">
+        <div class="req-info"><strong>{{ req.patient_name or 'Patient' }}</strong></div>
+        <div class="req-info">🏥 {{ req.hospital_name }}</div>
+        <div class="req-info">📦 {{ req.units }} unit(s) needed</div>
+        <div class="req-info">📍 {{ req.location or 'N/A' }}</div>
+      </div>
+      <div class="req-footer">
+        <span class="status-pill status-{{ req.status|lower }}">{{ req.status }}</span>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+
+<!-- Pending Donor Responses - Requests assigned to this donor -->
+{% if my_requests %}
+<div class="panel glass mt-2">
+  <div class="panel-header">
+    <h2>📬 Hospital Requests Assigned to You</h2>
+    <span class="badge badge-danger">Action Required</span>
+  </div>
+  <p style="color:#ccc;font-size:0.85rem;margin-bottom:0.75rem;">
+    A hospital near you has requested your blood. Please accept or decline below. If you accept, a volunteer will coordinate pickup.
+  </p>
+  <div class="table-wrap">
+    <table class="data-table">
+      <thead><tr><th>Hospital</th><th>Blood</th><th>Units</th><th>Priority</th><th>Location</th><th>Your Status</th><th>Actions</th></tr></thead>
+      <tbody>
+      {% for req in my_requests %}
+      <tr>
+        <td>{{ req.hospital_name }}</td>
+        <td><span class="bg-badge">{{ req.blood_group }}</span></td>
+        <td>{{ req.units }}</td>
+        <td><span class="priority-badge priority-{{ req.priority|lower }}">{{ req.priority }}</span></td>
+        <td>{{ req.location or '—' }}</td>
+        <td><span class="status-pill status-{{ (req.donor_status or 'pending')|lower }}">{{ req.donor_status or 'Pending' }}</span></td>
+        <td class="action-cell">
+          {% if req.donor_status == 'Pending' %}
+          <form method="POST" action="{{ url_for('donor_response', req_id=req.id, response='accept') }}" style="display:inline">
+            <button class="btn btn-xs btn-success">✅ Accept</button>
+          </form>
+          <form method="POST" action="{{ url_for('donor_response', req_id=req.id, response='reject') }}" style="display:inline">
+            <button class="btn btn-xs btn-danger">❌ Decline</button>
+          </form>
+          {% elif req.donor_status == 'Accepted' %}
+          <span class="badge badge-success">✅ Accepted</span>
+          {% elif req.donor_status == 'Rejected' %}
+          <span class="badge badge-danger">Declined</span>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
+<!-- Donation History -->
+<div class="panel glass mt-2">
+  <div class="panel-header"><h2>📜 Donation History</h2></div>
+  {% if history %}
+  <div class="table-wrap">
+    <table class="data-table">
+      <thead><tr><th>Date</th><th>Blood</th><th>Units</th><th>Hospital</th><th>Volunteer</th><th>Status</th></tr></thead>
+      <tbody>
+      {% for d in history %}
+      <tr>
+        <td>{{ d.donation_date or d.created_at[:10] }}</td>
+        <td><span class="bg-badge">{{ d.blood_group }}</span></td>
+        <td>{{ d.units }}</td>
+        <td>{{ d.hospital_name or '—' }}</td>
+        <td>{{ d.volunteer_name or '—' }}</td>
+        <td><span class="status-pill status-{{ d.status|lower }}">{{ d.status|capitalize }}</span></td>
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}<div class="empty-state">📭 No donation history yet. Schedule your first donation!</div>{% endif %}
+</div>
+{% endblock %}

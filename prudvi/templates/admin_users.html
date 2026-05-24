@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+{% block title %}Manage Users{% endblock %}
+{% block content %}
+<div class="dashboard-header"><h1>👥 User Management</h1><p class="dash-sub">View, edit, verify, or remove all registered users</p></div>
+<div class="panel glass">
+  <div class="panel-header">
+    <input type="text" id="userSearch" class="form-control form-control-sm" placeholder="🔍 Search by name, email, role..." style="max-width:300px" oninput="filterUsers()">
+    <span class="badge badge-info">{{ users_list|length }} total users</span>
+  </div>
+  <div class="table-wrap">
+    <table class="data-table" id="usersTable">
+      <thead><tr><th>#</th><th>Name</th><th>Email</th><th>Role</th><th>Blood</th><th>Verified</th><th>Available</th><th>Joined</th><th>Actions</th></tr></thead>
+      <tbody>
+      {% for u in users_list %}
+      <tr data-search="{{ u.full_name|lower }} {{ u.email|lower }} {{ u.role|lower }}">
+        <td>{{ u.id }}</td>
+        <td>
+          <span class="user-avatar-sm role-badge-{{ u.role }}">{{ u.full_name[0] }}</span>
+          {{ u.full_name }}
+        </td>
+        <td><small>{{ u.email }}</small></td>
+        <td><span class="role-tag role-tag-{{ u.role }}">{{ u.role|capitalize }}</span></td>
+        <td>{% if u.blood_group %}<span class="bg-badge-xs">{{ u.blood_group }}</span>{% else %}—{% endif %}</td>
+        <td>
+          <form method="POST" action="{{ url_for('admin_toggle_verify', uid=u.id) }}" style="display:inline">
+            <button class="badge {% if u.is_verified %}badge-success{% else %}badge-warning{% endif %}" style="border:none;cursor:pointer">
+              {% if u.is_verified %}✅ Yes{% else %}⏳ No{% endif %}
+            </button>
+          </form>
+        </td>
+        <td>{% if u.is_available %}<span class="badge badge-success">Yes</span>{% else %}<span class="badge badge-danger">No</span>{% endif %}</td>
+        <td><small>{{ u.created_at[:10] }}</small></td>
+        <td class="action-cell">
+          <button class="btn btn-xs btn-outline toggle-edit-btn" data-id="{{ u.id }}">✏️</button>
+          {% if u.role != 'admin' %}
+          <form method="POST" action="{{ url_for('admin_delete_user', uid=u.id) }}" style="display:inline" onsubmit="return confirm('Delete {{ u.full_name }}?')">
+            <button class="btn btn-xs btn-danger">🗑️</button>
+          </form>
+          {% endif %}
+          <div id="edit-{{ u.id }}" style="display:none" class="edit-form-inline mt-1">
+            <form method="POST" action="{{ url_for('admin_edit_user', uid=u.id) }}" class="auth-form">
+              <div class="form-row">
+                <input type="text" name="full_name" value="{{ u.full_name }}" class="form-control form-control-sm" placeholder="Name">
+                <select name="role" class="form-control form-control-sm">
+                  {% for r in roles %}<option value="{{ r }}" {% if u.role==r %}selected{% endif %}>{{ r|capitalize }}</option>{% endfor %}
+                </select>
+              </div>
+              <div class="form-row">
+                <select name="blood_group" class="form-control form-control-sm">
+                  <option value="">—</option>
+                  {% for bg in blood_groups %}<option value="{{ bg }}" {% if u.blood_group==bg %}selected{% endif %}>{{ bg }}</option>{% endfor %}
+                </select>
+                <input type="text" name="address" value="{{ u.address or '' }}" class="form-control form-control-sm" placeholder="Address">
+              </div>
+              <div class="form-row">
+                <input type="number" name="age" value="{{ u.age or '' }}" class="form-control form-control-sm" placeholder="Age">
+                <label class="check-label"><input type="checkbox" name="is_verified" {% if u.is_verified %}checked{% endif %}> Verified</label>
+                <label class="check-label"><input type="checkbox" name="is_available" {% if u.is_available %}checked{% endif %}> Available</label>
+              </div>
+              <button class="btn btn-xs btn-primary">💾 Save</button>
+              <button type="button" class="btn btn-xs btn-outline toggle-edit-btn" data-id="{{ u.id }}">Cancel</button>
+            </form>
+          </div>
+        </td>
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+<script>
+function toggleEdit(id) {
+  const el = document.getElementById('edit-'+id);
+  el.style.display = el.style.display === 'none' ? 'block' : 'none';
+}
+document.querySelectorAll('.toggle-edit-btn').forEach(btn => {
+  btn.addEventListener('click', () => toggleEdit(btn.dataset.id));
+});
+function filterUsers() {
+  const q = document.getElementById('userSearch').value.toLowerCase();
+  document.querySelectorAll('#usersTable tbody tr').forEach(row => {
+    row.style.display = row.dataset.search.includes(q) ? '' : 'none';
+  });
+}
+</script>
+{% endblock %}

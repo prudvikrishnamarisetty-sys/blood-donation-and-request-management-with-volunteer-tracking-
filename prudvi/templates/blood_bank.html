@@ -1,0 +1,408 @@
+{% extends "base.html" %}
+{% block title %}Blood Bank{% endblock %}
+{% block content %}
+<div class="dashboard-header">
+  <h1>🏦 Blood Bank — Management Hub</h1>
+  <p class="dash-sub">Central command for requests, inventory, volunteer dispatch and analytics. The Blood Bank is the heart of BloodFlow.</p>
+</div>
+
+<!-- Flow Banner -->
+<div class="flow-banner">
+  <div class="flow-node donor-bg">🧑‍⚕️ Donors<br><small>Add blood units</small></div>
+  <div class="flow-arrow-h">→</div>
+  <div class="flow-node bank-bg active-node">🏦 Blood Bank<br><small>Store &amp; Track</small></div>
+  <div class="flow-arrow-h">→</div>
+  <div class="flow-node vol-bg">🚗 Volunteers<br><small>Transport</small></div>
+  <div class="flow-arrow-h">→</div>
+  <div class="flow-node hosp-bg">🏥 Hospitals<br><small>Receive units</small></div>
+  
+</div>
+
+<!-- KPI Grid -->
+<div class="kpi-grid">
+  <div class="kpi-card kpi-total"><div class="kpi-icon">💉</div><div class="kpi-num" data-count="{{ total_units }}">0</div><div class="kpi-label">Total Units Stocked</div></div>
+  <div class="kpi-card kpi-donors"><div class="kpi-icon">🩸</div><div class="kpi-num" data-count="{{ flow_stats.donations_in }}">0</div><div class="kpi-label">Units Donated In</div></div>
+  <div class="kpi-card kpi-fulfilled"><div class="kpi-icon">🚑</div><div class="kpi-num" data-count="{{ flow_stats.units_delivered }}">0</div><div class="kpi-label">Units Delivered</div></div>
+  <div class="kpi-card kpi-pending"><div class="kpi-icon">⏳</div><div class="kpi-num" data-count="{{ flow_stats.active_requests }}">0</div><div class="kpi-label">Active Requests</div></div>
+  <div class="kpi-card kpi-warn"><div class="kpi-icon">⚠️</div><div class="kpi-num" data-count="{{ expiring_soon|length }}">0</div><div class="kpi-label">Expiring Soon</div></div>
+  <div class="kpi-card kpi-danger"><div class="kpi-icon">🗑️</div><div class="kpi-num" data-count="{{ expired|length }}">0</div><div class="kpi-label">Expired Units</div></div>
+</div>
+
+<!-- Tab Navigation -->
+<div class="tab-bar mt-2">
+  <button class="tab-btn active" onclick="switchTab('requests', this)">⚡ Requests
+    {% if pending_reqs %}<span class="tab-badge">{{ pending_reqs|length }}</span>{% endif %}
+  </button>
+  <button class="tab-btn" onclick="switchTab('inventory', this)">📦 Inventory &amp; Units</button>
+  <button class="tab-btn" onclick="switchTab('reports', this)">📊 Reports &amp; Analytics</button>
+</div>
+
+<!-- ===== TAB 1: REQUESTS ===== -->
+<div id="tab-requests" class="tab-content active">
+
+  <!-- Pending requests -->
+  <div class="panel glass mt-2">
+    <div class="panel-header">
+      <h2>⏳ Pending Hospital Requests <span class="badge badge-warning">{{ pending_reqs|length }}</span></h2>
+    </div>
+    {% if pending_reqs %}
+    <div class="table-wrap">
+      <table class="data-table">
+        <thead><tr><th>#</th><th>Hospital</th><th>Patient</th><th>Blood</th><th>Units</th><th>Priority</th><th>Location</th><th>Note</th><th>Date</th><th>Actions</th></tr></thead>
+        <tbody>
+        {% for req in pending_reqs %}
+        <tr>
+          <td><strong>#{{ req.id }}</strong></td>
+          <td>{{ req.hospital_name }}</td>
+          <td>{{ req.patient_name or '—' }}</td>
+          <td><span class="bg-badge">{{ req.blood_group }}</span></td>
+          <td>{{ req.units }}</td>
+          <td><span class="priority-badge priority-{{ req.priority|lower }}">{{ req.priority }}</span></td>
+          <td>{{ req.location or '—' }}</td>
+          <td class="text-muted">{{ req.note[:40] ~ '…' if req.note and req.note|length > 40 else req.note or '—' }}</td>
+          <td>{{ req.created_at[:10] }}</td>
+          <td class="action-cell">
+            <form method="POST" action="{{ url_for('admin_approve_request', req_id=req.id) }}" class="inline-form">
+              <input type="hidden" name="action" value="approve">
+              <button class="btn btn-xs btn-success">✅ Approve</button>
+            </form>
+            <button class="btn btn-xs btn-danger" onclick="toggleRejectForm({{ req.id }})">❌ Reject</button>
+            <form method="POST" action="{{ url_for('admin_approve_request', req_id=req.id) }}" class="reject-form" id="rj-{{ req.id }}" style="display:none">
+              <input type="hidden" name="action" value="reject">
+              <input type="text" name="note" placeholder="Reason…" class="form-control form-control-sm">
+              <button class="btn btn-xs btn-danger">Confirm</button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="empty-state">🎉 No pending requests — all clear!</div>
+    {% endif %}
+  </div>
+
+  <!-- Approved requests — assign volunteer -->
+  <div class="panel glass mt-2">
+    <div class="panel-header">
+      <h2>✅ Approved — Assign &amp; Track Volunteers</h2>
+    </div>
+    {% if approved_reqs %}
+    <div class="table-wrap">
+      <table class="data-table">
+        <thead><tr><th>#</th><th>Hospital</th><th>Blood</th><th>Units</th><th>Priority</th><th>Status</th><th>Assigned Volunteer</th><th>Assign / Reassign</th></tr></thead>
+        <tbody>
+        {% for req in approved_reqs %}
+        <tr>
+          <td><strong>#{{ req.id }}</strong></td>
+          <td>{{ req.hospital_name }}</td>
+          <td><span class="bg-badge">{{ req.blood_group }}</span></td>
+          <td>{{ req.units }}</td>
+          <td><span class="priority-badge priority-{{ req.priority|lower }}">{{ req.priority }}</span></td>
+          <td><span class="status-pill status-{{ req.status|lower }}">{{ req.status }}</span></td>
+          <td>
+            {% if req.volunteer_name %}
+              <span class="badge badge-info">👤 {{ req.volunteer_name }}</span>
+            {% else %}
+              <span class="text-muted">—</span>
+            {% endif %}
+          </td>
+          <td>
+            <form method="POST" action="{{ url_for('admin_assign_volunteer', req_id=req.id) }}" class="inline-form">
+              <select name="volunteer_id" class="form-control form-control-sm">
+                <option value="">Select volunteer</option>
+                {% for v in volunteers %}
+                <option value="{{ v.id }}" {% if req.volunteer_id == v.id %}selected{% endif %}>
+                  {{ v.full_name }} {% if v.is_available %}✅{% else %}⛔{% endif %}
+                </option>
+                {% endfor %}
+              </select>
+              <button class="btn btn-xs btn-primary">🚗 Assign</button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="empty-state">No approved requests pending volunteer assignment.</div>
+    {% endif %}
+  </div>
+
+  <!-- Audit Trail -->
+  <div class="panel glass mt-2">
+    <div class="panel-header"><h2>🔍 Audit Trail — Chain of Custody</h2></div>
+    {% if audit_log %}
+    <div class="audit-list">
+      {% for a in audit_log %}
+      <div class="audit-item">
+        <span class="audit-icon">{% if 'approved' in a.action|lower %}✅{% elif 'rejected' in a.action|lower or 'closed' in a.action|lower %}❌{% elif 'delivered' in a.action|lower %}🏁{% elif 'collected' in a.action|lower %}📦{% elif 'assigned' in a.action|lower %}👤{% else %}📝{% endif %}</span>
+        <div class="audit-body">
+          <span class="audit-action">{{ a.action }}</span>
+          <span class="audit-meta">Req #{{ a.request_id }} · <span class="bg-badge-xs">{{ a.blood_group }}</span> {{ a.units }} unit(s) · {{ a.hospital_name }}{% if a.actor_name %} · by {{ a.actor_name }}{% endif %}</span>
+          {% if a.note %}<span class="audit-note">{{ a.note }}</span>{% endif %}
+        </div>
+        <span class="audit-time">{{ a.created_at[:16] }}</span>
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}<div class="empty-state">No audit records yet.</div>{% endif %}
+  </div>
+
+</div><!-- end tab-requests -->
+
+<!-- ===== TAB 2: INVENTORY & UNITS ===== -->
+<div id="tab-inventory" class="tab-content" style="display:none">
+
+  <!-- Inventory grid -->
+  <div class="panel glass mt-2">
+    <div class="panel-header">
+      <h2>📦 Live Inventory by Blood Group</h2>
+    </div>
+    <div class="blood-grid">
+      {% for item in inventory %}
+      <div class="blood-card {% if item.units <= item.threshold_units %}blood-card-low{% elif item.units <= item.threshold_units*1.5 %}blood-card-warn{% else %}blood-card-ok{% endif %}">
+        <div class="bg-type">{{ item.blood_group }}</div>
+        <div class="bg-units">{{ item.units }}</div>
+        <div class="bg-label">units</div>
+        {% set bar_width = item.units * 2 if item.units * 2 < 100 else 100 %}
+        <div class="bg-bar"><div class="bg-bar-fill" style="width:{{ bar_width }}%"></div></div>
+        <div class="bg-status">{% if item.units <= item.threshold_units %}⚠️ Low{% elif item.units <= item.threshold_units*1.5 %}⚡ Fair{% else %}✅ Good{% endif %}</div>
+        <div class="bg-threshold">Threshold: {{ item.threshold_units }}</div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+
+
+
+  {% if expiring_soon %}
+  <div class="panel glass mt-2 panel-warn">
+    <div class="panel-header"><h2>⚠️ Units Expiring Within 7 Days</h2></div>
+    <div class="table-wrap">
+      <table class="data-table">
+        <thead><tr><th>Unit ID</th><th>Blood Group</th><th>Volume</th><th>Source</th><th>Collected</th><th>Expiry</th><th>Status</th></tr></thead>
+        <tbody>
+        {% for u in expiring_soon %}
+        <tr class="row-warn">
+          <td><code>{{ u.unit_uid }}</code></td>
+          <td><span class="bg-badge">{{ u.blood_group }}</span></td>
+          <td>{{ u.volume_ml }}ml</td>
+          <td>{{ u.source|capitalize }}</td>
+          <td>{{ u.collection_date }}</td>
+          <td><strong class="text-warn">{{ u.expiry_date }}</strong></td>
+          <td><span class="status-pill status-{{ u.status|lower }}">{{ u.status }}</span></td>
+        </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- All units table -->
+  <div class="panel glass mt-2">
+    <div class="panel-header"><h2>🔗 All Blood Units — Chain of Custody</h2></div>
+    <div class="table-wrap">
+      <table class="data-table">
+        <thead><tr><th>Unit ID</th><th>Blood</th><th>Vol</th><th>Source</th><th>Donor</th><th>Collected</th><th>Expiry</th><th>Status</th></tr></thead>
+        <tbody>
+        {% for u in blood_units %}
+        <tr {% if u.expiry_date < today %}class="row-expired"{% elif u.expiry_date <= warning_date %}class="row-warn"{% endif %}>
+          <td><code>{{ u.unit_uid }}</code></td>
+          <td><span class="bg-badge">{{ u.blood_group }}</span></td>
+          <td>{{ u.volume_ml }}ml</td>
+          <td>{{ u.source|capitalize }}</td>
+          <td>{{ u.donor_name or '—' }}</td>
+          <td>{{ u.collection_date }}</td>
+          <td>{% if u.expiry_date < today %}<span class="text-danger">{{ u.expiry_date }} 🗑️</span>{% elif u.expiry_date <= warning_date %}<span class="text-warn">{{ u.expiry_date }} ⚠️</span>{% else %}{{ u.expiry_date }}{% endif %}</td>
+          <td><span class="status-pill status-{{ u.status|lower }}">{{ u.status }}</span></td>
+        </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div><!-- end tab-inventory -->
+
+<!-- ===== TAB 3: REPORTS & ANALYTICS ===== -->
+<div id="tab-reports" class="tab-content" style="display:none">
+
+  <!-- Summary KPIs -->
+  <div class="kpi-grid mt-2">
+    <div class="kpi-card kpi-total"><div class="kpi-icon">📋</div><div class="kpi-num" data-count="{{ reports.total_requests }}">0</div><div class="kpi-label">Total Requests</div></div>
+    <div class="kpi-card kpi-donors"><div class="kpi-icon">🧑‍⚕️</div><div class="kpi-num" data-count="{{ reports.total_donors }}">0</div><div class="kpi-label">Registered Donors</div></div>
+    <div class="kpi-card kpi-fulfilled"><div class="kpi-icon">✅</div><div class="kpi-num">{{ reports.fulfillment_rate }}%</div><div class="kpi-label">Fulfillment Rate</div></div>
+    <div class="kpi-card kpi-hosp"><div class="kpi-icon">📦</div><div class="kpi-num">{{ reports.avg_units_per_req }}</div><div class="kpi-label">Avg Units / Request</div></div>
+    <div class="kpi-card kpi-pending"><div class="kpi-icon">🩸</div><div class="kpi-num" data-count="{{ total_donated }}">0</div><div class="kpi-label">Completed Donations</div></div>
+    <div class="kpi-card kpi-warn"><div class="kpi-icon">🏥</div><div class="kpi-num" data-count="{{ flow_stats.requests_fulfilled }}">0</div><div class="kpi-label">Requests Fulfilled</div></div>
+  </div>
+
+  <!-- Charts row -->
+  <div class="dash-grid-2col mt-2">
+
+    <!-- Inventory bar chart -->
+    <div class="panel glass">
+      <div class="panel-header"><h2>📊 Inventory by Blood Group</h2></div>
+      <canvas id="bbInventoryChart" height="220"></canvas>
+    </div>
+
+    <!-- Request status doughnut -->
+    <div class="panel glass">
+      <div class="panel-header"><h2>🍩 Request Status Breakdown</h2></div>
+      <canvas id="bbStatusChart" height="220"></canvas>
+    </div>
+
+  </div>
+
+  <!-- Monthly trend -->
+  <div class="panel glass mt-2">
+    <div class="panel-header"><h2>📈 Monthly Donations Trend</h2></div>
+    <canvas id="bbMonthlyChart" height="140"></canvas>
+  </div>
+
+  <!-- Top Donors -->
+  {% if reports.top_donors %}
+  <div class="panel glass mt-2">
+    <div class="panel-header"><h2>🏆 Top Donors</h2></div>
+    <div class="table-wrap">
+      <table class="data-table">
+        <thead><tr><th>Rank</th><th>Donor</th><th>Blood Group</th><th>Donations</th><th>Total Units</th></tr></thead>
+        <tbody>
+        {% for d in reports.top_donors %}
+        <tr>
+          <td>
+            {% if loop.index == 1 %}🥇{% elif loop.index == 2 %}🥈{% elif loop.index == 3 %}🥉{% else %}#{{ loop.index }}{% endif %}
+          </td>
+          <td><strong>{{ d.full_name }}</strong></td>
+          <td><span class="bg-badge">{{ d.blood_group }}</span></td>
+          <td>{{ d.cnt }}</td>
+          <td>{{ d.total_units }} unit(s)</td>
+        </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- Donations by blood group breakdown -->
+  {% if reports.donations_by_bg %}
+  <div class="panel glass mt-2">
+    <div class="panel-header"><h2>🩸 Completed Donations by Blood Group</h2></div>
+    <div class="table-wrap">
+      <table class="data-table">
+        <thead><tr><th>Blood Group</th><th>Donations</th><th>Total Units</th><th>Share</th></tr></thead>
+        <tbody>
+        {% set grand_total = reports.donations_by_bg | sum(attribute='total_units') %}
+        {% for row in reports.donations_by_bg %}
+        <tr>
+          <td><span class="bg-badge">{{ row.blood_group }}</span></td>
+          <td>{{ row.cnt }}</td>
+          <td>{{ row.total_units }}</td>
+          <td>
+            {% if grand_total > 0 %}
+            {% set pct = (row.total_units / grand_total * 100) | round(1) %}
+            <div class="mini-bar-wrap"><div class="mini-bar-fill" style="width:{{ pct }}%"></div><span>{{ pct }}%</span></div>
+            {% else %}—{% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% endif %}
+
+</div><!-- end tab-reports -->
+
+<style>
+.tab-bar { display:flex; gap:0.5rem; border-bottom:2px solid rgba(255,255,255,0.1); padding-bottom:0; }
+.tab-btn { background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.15); color:#ccc;
+  padding:0.6rem 1.2rem; border-radius:8px 8px 0 0; cursor:pointer; font-size:0.92rem;
+  transition:all 0.2s; display:flex; align-items:center; gap:0.4rem; }
+.tab-btn:hover { background:rgba(255,255,255,0.1); color:#fff; }
+.tab-btn.active { background:linear-gradient(135deg,rgba(220,38,38,0.4),rgba(185,28,28,0.3));
+  border-color:rgba(220,38,38,0.5); color:#fff; font-weight:600; }
+.tab-badge { background:#dc2626; color:#fff; border-radius:50%; width:1.3rem; height:1.3rem;
+  display:inline-flex; align-items:center; justify-content:center; font-size:0.7rem; font-weight:700; }
+.tab-content { animation: fadeIn 0.25s ease; }
+@keyframes fadeIn { from{opacity:0;transform:translateY(6px)} to{opacity:1;transform:none} }
+.mini-bar-wrap { display:flex; align-items:center; gap:0.5rem; }
+.mini-bar-fill { height:8px; border-radius:4px; background:linear-gradient(90deg,#dc2626,#f87171); min-width:4px; }
+.mini-bar-wrap span { font-size:0.8rem; color:#ccc; }
+.kpi-card.kpi-hosp { background:linear-gradient(135deg,rgba(79,70,229,0.3),rgba(59,130,246,0.2)); }
+</style>
+
+<script>
+function switchTab(name, btn) {
+  document.querySelectorAll('.tab-content').forEach(t => t.style.display = 'none');
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('tab-' + name).style.display = 'block';
+  btn.classList.add('active');
+  if (name === 'reports') initCharts();
+}
+function toggleRejectForm(id) {
+  const f = document.getElementById('rj-' + id);
+  f.style.display = f.style.display === 'none' ? 'flex' : 'none';
+}
+
+let chartsInit = false;
+function initCharts() {
+  if (chartsInit) return;
+  chartsInit = true;
+  fetch('/api/bb-reports').then(r => r.json()).then(data => {
+    const chartOpts = (extra = {}) => ({
+      responsive: true,
+      plugins: { legend: { labels: { color: '#ccc', font: { size: 11 } } } },
+      ...extra
+    });
+    // Inventory bar
+    new Chart(document.getElementById('bbInventoryChart').getContext('2d'), {
+      type: 'bar',
+      data: {
+        labels: data.inventory.labels,
+        datasets: [
+          { label: 'Units Available', data: data.inventory.units, backgroundColor: 'rgba(220,38,38,0.75)', borderRadius: 6 },
+          { label: 'Threshold', data: data.inventory.thresholds, backgroundColor: 'rgba(251,191,36,0.4)', borderRadius: 6 }
+        ]
+      },
+      options: chartOpts({ scales: { x: { ticks: { color: '#aaa' } }, y: { ticks: { color: '#aaa' }, beginAtZero: true } } })
+    });
+    // Status doughnut
+    const statusColors = ['rgba(251,191,36,0.8)','rgba(59,130,246,0.8)','rgba(16,185,129,0.8)','rgba(239,68,68,0.8)','rgba(107,114,128,0.8)'];
+    new Chart(document.getElementById('bbStatusChart').getContext('2d'), {
+      type: 'doughnut',
+      data: {
+        labels: data.statuses.labels,
+        datasets: [{ data: data.statuses.counts, backgroundColor: statusColors, borderWidth: 2, borderColor: 'rgba(0,0,0,0.3)' }]
+      },
+      options: chartOpts({ cutout: '60%' })
+    });
+    // Monthly trend
+    new Chart(document.getElementById('bbMonthlyChart').getContext('2d'), {
+      type: 'line',
+      data: {
+        labels: data.monthly.labels,
+        datasets: [{ label: 'Units Donated', data: data.monthly.units,
+          borderColor: '#dc2626', backgroundColor: 'rgba(220,38,38,0.15)',
+          borderWidth: 2.5, fill: true, tension: 0.4,
+          pointBackgroundColor: '#dc2626', pointRadius: 5 }]
+      },
+      options: chartOpts({ scales: { x: { ticks: { color: '#aaa' } }, y: { ticks: { color: '#aaa' }, beginAtZero: true } } })
+    });
+  });
+}
+// Animate KPI counters
+document.addEventListener('DOMContentLoaded', () => {
+  document.querySelectorAll('.kpi-num[data-count]').forEach(el => {
+    const target = parseInt(el.dataset.count) || 0;
+    let cur = 0; const step = Math.ceil(target / 40);
+    const t = setInterval(() => { cur = Math.min(cur + step, target); el.textContent = cur; if (cur >= target) clearInterval(t); }, 30);
+  });
+});
+</script>
+{% endblock %}

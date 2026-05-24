@@ -1,0 +1,126 @@
+{% extends "base.html" %}
+{% block title %}Register{% endblock %}
+{% block content %}
+<div class="auth-page auth-page-wide">
+  <div class="auth-card glass">
+    <div class="auth-logo">🩸</div>
+    <h1 class="auth-title">Join BloodFlow</h1>
+    <p class="auth-sub">Create your account and start saving lives</p>
+    <form method="POST" class="auth-form" id="register-form" onsubmit="disableHidden()" novalidate>
+      <div class="role-selector">
+        {% for r in ['donor','volunteer','hospital','blood_bank'] %}
+        <label class="role-opt">
+          <input type="radio" name="role" value="{{ r }}" {% if loop.first %}checked{% endif %} onchange="updateRole(this.value)">
+          <span class="role-card">
+            <span class="role-icon">{% if r=='donor' %}🧑‍⚕️{% elif r=='volunteer' %}🚗{% elif r=='hospital' %}🏥{% else %}🏦{% endif %}</span>
+            <span>{{ r.replace('_',' ')|title }}</span>
+          </span>
+        </label>
+        {% endfor %}
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Full Name</label>
+          <input type="text" name="full_name" placeholder="Your full name" required class="form-control">
+        </div>
+        <div class="form-group">
+          <label>Email</label>
+          <input type="email" name="email" placeholder="you@example.com" required class="form-control">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Phone</label>
+          <input type="text" name="phone" placeholder="10-digit number" class="form-control">
+        </div>
+        <div class="form-group">
+          <label>Password</label>
+          <input type="password" name="password" placeholder="Min 6 characters" required class="form-control">
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Address</label>
+        <input type="text" name="address" placeholder="City, State" class="form-control">
+      </div>
+      <!-- Donor fields -->
+      <div id="donor-fields" class="role-fields">
+        <div class="form-row">
+          <div class="form-group">
+            <label>Blood Group</label>
+            <select name="blood_group" class="form-control">
+              <option value="">Select Blood Group</option>
+              {% for bg in blood_groups %}<option value="{{ bg }}">{{ bg }}</option>{% endfor %}
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Age</label>
+            <input type="number" name="age" placeholder="18-65" min="18" max="65" class="form-control">
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Gender</label>
+          <select name="gender" class="form-control">
+            <option value="">Select Gender</option>
+            {% for g in genders %}<option value="{{ g }}">{{ g }}</option>{% endfor %}
+          </select>
+        </div>
+      </div>
+      <!-- Hospital fields -->
+      <div id="hospital-fields" class="role-fields" style="display:none">
+        <div class="form-row">
+          <div class="form-group">
+            <label>Hospital Type</label>
+            <select name="hospital_type" class="form-control">
+              <option value="">Select Type</option>
+              <option>General</option><option>Specialty</option><option>Emergency</option><option>Government</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Registration No.</label>
+            <input type="text" name="org_reg_no" placeholder="Hospital Reg. No." class="form-control">
+          </div>
+        </div>
+      </div>
+      <!-- Blood Bank fields -->
+      <div id="blood_bank-fields" class="role-fields" style="display:none">
+        <div class="form-row">
+          <div class="form-group">
+            <label>Blood Bank Licence No. <span class="text-danger">*</span></label>
+            <input type="text" name="org_reg_no" placeholder="e.g. BB-AP-2024-001" class="form-control">
+          </div>
+          <div class="form-group">
+            <label>Bank Type</label>
+            <select name="hospital_type" class="form-control">
+              <option value="Licensed">Licensed Blood Bank</option>
+              <option value="Government">Government Blood Bank</option>
+              <option value="Hospital-based">Hospital-based Bank</option>
+              <option value="Mobile">Mobile Collection Unit</option>
+            </select>
+          </div>
+        </div>
+        <div class="info-note">🔒 Your account will require admin approval before you can log in as a Blood Bank.</div>
+      </div>
+      <button type="submit" class="btn btn-primary btn-block">Create Account & Get OTP →</button>
+    </form>
+    <p class="auth-link">Already registered? <a href="{{ url_for('login') }}">Sign in</a></p>
+  </div>
+</div>
+<script>
+function updateRole(role) {
+  document.getElementById('donor-fields').style.display = role === 'donor' ? 'block' : 'none';
+  document.getElementById('hospital-fields').style.display = role === 'hospital' ? 'block' : 'none';
+  document.getElementById('blood_bank-fields').style.display = role === 'blood_bank' ? 'block' : 'none';
+}
+function disableHidden() {
+  // Disable all inputs inside hidden role-field sections so they don't submit
+  document.querySelectorAll('.role-fields').forEach(function(div) {
+    if (div.style.display === 'none') {
+      div.querySelectorAll('input, select, textarea').forEach(function(el) {
+        el.disabled = true;
+      });
+    }
+  });
+  return true;
+}
+</script>
+{% endblock %}

@@ -1,0 +1,362 @@
+{% extends "base.html" %}
+{% block title %}Volunteer Dashboard{% endblock %}
+{% block content %}
+<div class="dashboard-header">
+  <h1>🚗 Volunteer Dashboard</h1>
+  <p class="dash-sub">Accept assignments, track pickups and deliveries, update your GPS location</p>
+</div>
+
+<!-- Stats Row -->
+<div class="kpi-grid kpi-grid-3">
+  <div class="kpi-card kpi-vol"><div class="kpi-icon">✅</div><div class="kpi-num" data-count="{{ stats.completed }}">0</div><div class="kpi-label">Completed</div></div>
+  <div class="kpi-card kpi-pending"><div class="kpi-icon">🔄</div><div class="kpi-num" data-count="{{ stats.active }}">0</div><div class="kpi-label">Active Tasks</div></div>
+  <div class="kpi-card kpi-total"><div class="kpi-icon">📋</div><div class="kpi-num" data-count="{{ stats.total }}">0</div><div class="kpi-label">All Tasks</div></div>
+</div>
+
+<div class="dash-grid-2col">
+
+<!-- GPS Update -->
+<div class="panel glass">
+  <div class="panel-header"><h2>📍 Update Your Location</h2>
+    <form method="POST" action="{{ url_for('toggle_availability') }}" style="display:inline">
+      <button class="btn btn-sm {% if current_user.is_available %}btn-danger{% else %}btn-success{% endif %}">
+        {% if current_user.is_available %}🔴 Go Offline{% else %}🟢 Go Online{% endif %}
+      </button>
+    </form>
+  </div>
+  <div id="gps-panel">
+    <p class="text-muted">Current: {{ current_user.latitude or 'Unknown' }}, {{ current_user.longitude or 'Unknown' }}</p>
+    <button class="btn btn-primary" onclick="getGPS()">📡 Auto-Detect Location</button>
+    <form method="POST" action="{{ url_for('update_gps') }}" class="inline-form mt-1" id="gpsForm">
+      <input type="hidden" name="latitude" id="gpsLat">
+      <input type="hidden" name="longitude" id="gpsLng">
+      <input type="text" name="label" placeholder="Status label (e.g. En Route)" class="form-control form-control-sm">
+      <button class="btn btn-sm btn-outline">📤 Update</button>
+    </form>
+  </div>
+  <div id="mini-map" style="height:200px;border-radius:10px;margin-top:1rem;overflow:hidden"></div>
+</div>
+
+<!-- Available Requests to Accept -->
+<div class="panel glass">
+  <div class="panel-header"><h2>📬 Available Requests</h2></div>
+  {% if open_reqs %}
+  <div class="task-list">
+    {% for req in open_reqs %}
+    <div class="task-card priority-{{ req.priority|lower }}">
+      <div class="task-header">
+        <span class="bg-badge">{{ req.blood_group }}</span>
+        <span class="priority-badge priority-{{ req.priority|lower }}">{{ req.priority }}</span>
+      </div>
+      <div class="task-body">
+        <div><strong>{{ req.patient_name or 'Patient' }}</strong></div>
+        <div>🏥 {{ req.hospital_name }}</div>
+        <div>📦 {{ req.units }} unit(s)</div>
+        <div>📍 {{ req.location or 'N/A' }}</div>
+      </div>
+      <div style="display:flex;gap:0.5rem;margin-top:0.5rem;">
+        <form method="POST" action="{{ url_for('volunteer_accept', req_id=req.id) }}" style="flex:1">
+          <button class="btn btn-success btn-block">✅ Accept</button>
+        </form>
+        <form method="POST" action="{{ url_for('volunteer_reject', req_id=req.id) }}" style="flex:1"
+              onsubmit="return confirm('Decline this request? It will remain open for others.')">
+          <button class="btn btn-danger btn-block">❌ Reject</button>
+        </form>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}<div class="empty-state">📭 No available requests right now</div>{% endif %}
+</div>
+
+</div><!-- end 2col -->
+
+<!-- My Tasks — Active & History -->
+<div class="panel glass mt-2">
+  <div class="panel-header"><h2>📋 My Tasks</h2></div>
+  {% if my_tasks %}
+  <div class="table-wrap">
+    <table class="data-table">
+      <thead><tr><th>Request #</th><th>Hospital</th><th>Blood</th><th>Units</th><th>Pickup</th><th>Delivery</th><th>Status</th><th>Actions</th></tr></thead>
+      <tbody>
+      {% for task in my_tasks %}
+      <tr>
+        <td>#{{ task.id }}</td>
+        <td>{{ task.hospital_name }}</td>
+        <td><span class="bg-badge">{{ task.blood_group }}</span></td>
+        <td>{{ task.units }}</td>
+        <td>{{ task.pickup_location or 'Blood Bank' }}</td>
+        <td>{{ task.delivery_location or task.location or 'Hospital' }}</td>
+        <td><span class="status-pill status-{{ task.task_status|lower }}">{{ task.task_status }}</span></td>
+        <td class="action-cell">
+          {% if task.task_status == 'Assigned' %}
+          <form method="POST" action="{{ url_for('update_task', task_id=task.task_id) }}">
+            <input type="hidden" name="action" value="collected">
+            <button class="btn btn-xs btn-primary">📦 Mark Collected</button>
+          </form>
+          {% elif task.task_status == 'Collected' %}
+          <form method="POST" action="{{ url_for('update_task', task_id=task.task_id) }}">
+            <input type="hidden" name="action" value="delivered">
+            <button class="btn btn-xs btn-success">🏁 Mark Delivered</button>
+          </form>
+          {% elif task.task_status == 'Delivered' %}
+          <span class="badge badge-success">✅ Done</span>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}<div class="empty-state">📭 No tasks yet. Accept a request above!</div>{% endif %}
+</div>
+
+<!-- Blood Bank Donation Requests from Donors (with Accept AND Reject) -->
+{% if bb_donation_reqs %}
+<div class="panel glass mt-2" style="border:1px solid rgba(220,38,38,0.3);background:rgba(220,38,38,0.05);">
+  <div class="panel-header">
+    <h2>🏦 Donor → Blood Bank Donation Requests</h2>
+    <span class="badge badge-danger">{{ bb_donation_reqs|length }} Pending</span>
+  </div>
+  <p style="color:#ccc;font-size:0.85rem;margin-bottom:0.75rem;">
+    Donors below want to donate blood to a blood bank. Accept to coordinate pickup, then mark complete when delivered.
+  </p>
+  <div class="table-wrap">
+    <table class="data-table">
+      <thead><tr><th>Donor</th><th>Blood</th><th>Units</th><th>Blood Bank</th><th>Note</th><th>Date</th><th>Actions</th></tr></thead>
+      <tbody>
+      {% for req in bb_donation_reqs %}
+      <tr>
+        <td>
+          {{ req.donor_name }}<br>
+          {% if req.donor_phone %}<small>📞 {{ req.donor_phone }}</small>{% endif %}
+        </td>
+        <td><span class="bg-badge">{{ req.blood_group }}</span></td>
+        <td>{{ req.units }}</td>
+        <td>🏦 {{ req.blood_bank_name }}<br><small>{{ req.bb_address or '' }}</small></td>
+        <td>{{ req.note or '—' }}</td>
+        <td>{{ req.created_at[:10] }}</td>
+        <td class="action-cell" style="display:flex;gap:0.3rem;flex-wrap:wrap;">
+          <form method="POST" action="{{ url_for('volunteer_handle_bb_donation', req_id=req.id, action='accept') }}" style="display:inline">
+            <button class="btn btn-xs btn-success">✅ Accept</button>
+          </form>
+          <form method="POST" action="{{ url_for('volunteer_reject_bb_donation', req_id=req.id) }}" style="display:inline">
+            <button class="btn btn-xs btn-danger" onclick="return confirm('Reject this request?')">❌ Reject</button>
+          </form>
+          <form method="POST" action="{{ url_for('volunteer_handle_bb_donation', req_id=req.id, action='complete') }}" style="display:inline">
+            <button class="btn btn-xs btn-primary">🏁 Complete</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
+<!-- Donor Assist Requests (Hospital accepted, need volunteer pickup) -->
+{% if donor_assist_reqs %}
+<div class="panel glass mt-2" style="border:1px solid rgba(220,38,38,0.4);background:rgba(220,38,38,0.06);">
+  <div class="panel-header">
+    <h2>🤝 Hospital-Accepted Donor Donations &mdash; Assist Needed</h2>
+    <span class="badge badge-danger">{{ donor_assist_reqs|length }} Pending</span>
+  </div>
+  <p style="color:#ccc;font-size:0.85rem;margin-bottom:0.75rem;">
+    A hospital accepted a donor's donation. Accept to coordinate pickup &amp; delivery.
+    <strong>Donor sees your contact if you accept.</strong> If you reject, the next nearby volunteer is notified.
+  </p>
+  <div class="table-wrap">
+    <table class="data-table">
+      <thead><tr><th>Donor</th><th>Blood</th><th>Hospital</th><th>Date</th><th>Actions</th></tr></thead>
+      <tbody>
+      {% for req in donor_assist_reqs %}
+      <tr>
+        <td>
+          {{ req.donor_name }}<br>
+          {% if req.donor_phone %}<small>📞 {{ req.donor_phone }}</small><br>{% endif %}
+          {% if req.donor_address %}<small>📍 {{ req.donor_address }}</small>{% endif %}
+        </td>
+        <td><span class="bg-badge">{{ req.donor_bg or req.blood_group }}</span></td>
+        <td>
+          🏥 {{ req.hospital_name or '—' }}<br>
+          {% if req.hospital_address %}<small>{{ req.hospital_address }}</small>{% endif %}
+        </td>
+        <td>{{ req.created_at[:10] }}</td>
+        <td class="action-cell" style="display:flex;gap:0.3rem;flex-wrap:wrap;">
+          <form method="POST" action="{{ url_for('volunteer_accept_donor_assist', donation_id=req.id) }}" style="display:inline">
+            <button class="btn btn-xs btn-success" onclick="return confirm('Accept? Donor will see your contact details.')">✅ Accept</button>
+          </form>
+          <form method="POST" action="{{ url_for('volunteer_reject_donor_assist', donation_id=req.id) }}" style="display:inline">
+            <button class="btn btn-xs btn-danger" onclick="return confirm('Reject? Next nearby volunteer will be notified.')">❌ Reject</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
+<!-- In-Progress Donor Assists (volunteer accepted, awaiting donation completion) -->
+{% if in_progress_donor_assists %}
+<div class="panel glass mt-2" style="border:1px solid rgba(59,130,246,0.4);background:rgba(59,130,246,0.06);">
+  <div class="panel-header">
+    <h2>🚗 My In-Progress Donor Pickups</h2>
+    <span class="badge badge-info">{{ in_progress_donor_assists|length }} Active</span>
+  </div>
+  <p style="color:#ccc;font-size:0.85rem;margin-bottom:0.75rem;">
+    You accepted these donor assist tasks. Once the donor hands over blood, click <strong>Donor Donated Blood</strong> to notify the hospital.
+  </p>
+  <div class="table-wrap">
+    <table class="data-table">
+      <thead><tr><th>Donor</th><th>Blood</th><th>Hospital</th><th>Date</th><th>Action</th></tr></thead>
+      <tbody>
+      {% for req in in_progress_donor_assists %}
+      <tr>
+        <td>
+          {{ req.donor_name }}<br>
+          {% if req.donor_phone %}<small>📞 {{ req.donor_phone }}</small><br>{% endif %}
+          {% if req.donor_address %}<small>📍 {{ req.donor_address }}</small>{% endif %}
+        </td>
+        <td><span class="bg-badge">{{ req.donor_bg or req.blood_group }}</span></td>
+        <td>🏥 {{ req.hospital_name or '—' }}</td>
+        <td>{{ req.created_at[:10] }}</td>
+        <td>
+          <form method="POST" action="{{ url_for('volunteer_donor_donated', donation_id=req.id) }}"
+                onsubmit="return confirm('Confirm donor has donated blood? The hospital will be notified.')">
+            <button class="btn btn-xs btn-primary">🩸 Donor Donated Blood</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
+
+<!-- Map with Donors, Hospitals & Blood Banks -->
+<div class="panel glass mt-2">
+  <div class="panel-header">
+    <h2>🗺️ Nearby Donors, Hospitals &amp; Blood Banks</h2>
+    <button class="btn btn-sm btn-outline" onclick="refreshDonorMap()" id="refresh-map-btn"
+            title="Reload map markers">🔄 Refresh Map</button>
+  </div>
+  <div id="donor-map" style="height:350px;border-radius:12px;overflow:hidden"></div>
+  <div style="display:flex;gap:1.2rem;margin-top:0.5rem;flex-wrap:wrap;font-size:0.8rem;color:#aaa;">
+    <span>🩸 Donor</span>
+    <span>🏥 Hospital</span>
+    <span>🏦 Blood Bank</span>
+    <span>🚗 You</span>
+  </div>
+</div>
+
+
+<script>
+function getGPS() {
+  if (navigator.geolocation) {
+    navigator.geolocation.getCurrentPosition(pos => {
+      document.getElementById('gpsLat').value = pos.coords.latitude;
+      document.getElementById('gpsLng').value = pos.coords.longitude;
+      alert(`Location detected: ${pos.coords.latitude.toFixed(4)}, ${pos.coords.longitude.toFixed(4)}`);
+    });
+  }
+}
+
+// Refresh map function — clears dynamic markers and re-fetches from APIs
+let dynamicLayers = [];
+function clearDynamicLayers() {
+  dynamicLayers.forEach(m => donorMap.removeLayer(m));
+  dynamicLayers = [];
+}
+function plotHospitals(donorMap) {
+  return fetch('/api/hospitals-locations').then(r => r.json()).then(hospitals => {
+    hospitals.forEach(h => {
+      if (h.lat && h.lng) {
+        const m = L.marker([h.lat, h.lng], {icon: L.divIcon({html:'🏥', className:'map-vol-icon', iconSize:[30,30]})})
+          .addTo(donorMap).bindPopup(`<b>🏥 ${h.name}</b><br>${h.address}`);
+        dynamicLayers.push(m);
+      }
+    });
+  }).catch(() => {});
+}
+function plotBanks(donorMap) {
+  return fetch('/api/bloodbanks-locations').then(r => r.json()).then(banks => {
+    banks.forEach(b => {
+      if (b.lat && b.lng) {
+        const m = L.marker([b.lat, b.lng], {icon: L.divIcon({html:'🏦', className:'map-vol-icon', iconSize:[30,30]})})
+          .addTo(donorMap).bindPopup(`<b>🏦 ${b.name}</b><br>${b.address}`);
+        dynamicLayers.push(m);
+      }
+    });
+  }).catch(() => {});
+}
+function refreshDonorMap() {
+  const btn = document.getElementById('refresh-map-btn');
+  if (btn) { btn.textContent = '⏳ Refreshing…'; btn.disabled = true; }
+  clearDynamicLayers();
+  Promise.all([plotHospitals(donorMap), plotBanks(donorMap)]).finally(() => {
+    if (btn) { btn.textContent = '🔄 Refresh Map'; btn.disabled = false; }
+  });
+}
+
+let donorMap;
+document.addEventListener('DOMContentLoaded', () => {
+  const lat = {{ current_user.latitude or 16.5062 }};
+  const lng = {{ current_user.longitude or 80.6480 }};
+  const miniMap = L.map('mini-map').setView([lat, lng], 13);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(miniMap);
+  L.marker([lat, lng], {icon: L.divIcon({html:'🚗', className:'map-vol-icon', iconSize:[30,30]})}).addTo(miniMap).bindPopup('Your Location');
+
+  donorMap = L.map('donor-map').setView([lat, lng], 12);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(donorMap);
+
+  // Self marker
+  L.marker([lat, lng], {icon: L.divIcon({html:'🚗', className:'map-vol-icon', iconSize:[30,30]})})
+    .addTo(donorMap).bindPopup('<b>🚗 Your Location</b>');
+
+  // Plot donors
+  const donors = {{ donors | tojson }};
+  donors.forEach(d => {
+    if (d.latitude && d.longitude) {
+      L.marker([d.latitude, d.longitude], {icon: L.divIcon({html:'🩸', className:'map-vol-icon', iconSize:[24,24]})})
+        .addTo(donorMap).bindPopup(`<b>${d.full_name}</b><br>${d.blood_group}<br>${d.address}`);
+    }
+  });
+
+  // Plot hospitals
+  fetch('/api/hospitals-locations')
+    .then(r => r.json())
+    .then(hospitals => {
+      hospitals.forEach(h => {
+        if (h.lat && h.lng) {
+          L.marker([h.lat, h.lng], {icon: L.divIcon({html:'🏥', className:'map-vol-icon', iconSize:[30,30]})})
+            .addTo(donorMap).bindPopup(`<b>🏥 ${h.name}</b><br>${h.address}`);
+        }
+      });
+    }).catch(() => {});
+
+  // Plot blood banks 🏦
+  fetch('/api/bloodbanks-locations')
+    .then(r => r.json())
+    .then(banks => {
+      banks.forEach(b => {
+        if (b.lat && b.lng) {
+          L.marker([b.lat, b.lng], {icon: L.divIcon({html:'🏦', className:'map-vol-icon', iconSize:[30,30]})})
+            .addTo(donorMap).bindPopup(`<b>🏦 ${b.name}</b><br>${b.address}`);
+        }
+      });
+    }).catch(() => {});
+
+  // Count KPI numbers
+  document.querySelectorAll('.kpi-num[data-count]').forEach(el => {
+    const target = parseInt(el.dataset.count) || 0;
+    let cur = 0; const step = Math.ceil(target / 30);
+    const iv = setInterval(() => { cur = Math.min(cur + step, target); el.textContent = cur; if (cur >= target) clearInterval(iv); }, 40);
+  });
+});
+</script>
+{% endblock %}

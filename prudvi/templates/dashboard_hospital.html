@@ -1,0 +1,311 @@
+{% extends "base.html" %}
+{% block title %}Hospital Dashboard{% endblock %}
+{% block content %}
+<div class="dashboard-header">
+  <h1>🏥 Hospital Dashboard</h1>
+  <p class="dash-sub">Submit blood requests, track delivery status, and view volunteer locations</p>
+</div>
+
+<div class="dash-grid-2col">
+
+<!-- Submit Blood Request -->
+<div class="panel glass">
+  <div class="panel-header"><h2>🆘 Submit Blood Request</h2></div>
+  <form method="POST" action="{{ url_for('blood_request') }}" class="auth-form">
+    <div class="form-row">
+      <div class="form-group">
+        <label>Patient Name</label>
+        <input type="text" name="patient_name" required class="form-control" placeholder="Patient name">
+      </div>
+      <div class="form-group">
+        <label>Location / Ward</label>
+        <input type="text" name="location" required class="form-control" placeholder="ICU, Ward 4...">
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Blood Group</label>
+        <select name="blood_group" required class="form-control">
+          {% for bg in blood_groups %}<option value="{{ bg }}">{{ bg }}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Units Required</label>
+        <input type="number" name="units" value="1" min="1" max="20" required class="form-control">
+      </div>
+    </div>
+    <div class="form-group">
+      <label>Priority Level</label>
+      <div class="priority-selector">
+        {% for p in priorities %}
+        <label class="priority-opt">
+          <input type="radio" name="priority" value="{{ p }}" {% if p=='Medium' %}checked{% endif %}>
+          <span class="priority-card priority-{{ p|lower }}">{{ p }}</span>
+        </label>
+        {% endfor %}
+      </div>
+    </div>
+    <div class="form-group">
+      <label>Additional Notes</label>
+      <textarea name="note" class="form-control" rows="2" placeholder="Any special requirements..."></textarea>
+    </div>
+    <button class="btn btn-primary btn-block">📤 Submit Request (Admin will approve)</button>
+  </form>
+</div>
+
+<!-- Registered Blood Bank Inventories -->
+<div class="panel glass">
+  <div class="panel-header"><h2>📦 Registered Blood Bank Inventories</h2><span class="badge badge-info">Live</span></div>
+  {% if nearby_blood_banks %}
+  <div class="bb-inv-table-wrap">
+    {% for item in nearby_blood_banks %}
+    <div class="bb-inv-block">
+      <div class="bb-inv-header">
+        <span>🏦 <strong>{{ item.bank.full_name }}</strong></span>
+        {% if item.distance_km is not none %}
+        <span class="badge badge-success">{{ item.distance_km }} km</span>
+        {% endif %}
+        <a href="{{ url_for('hospital_blood_bank_detail', bb_id=item.bank.id) }}" class="badge badge-info">View →</a>
+      </div>
+      {% if item.inventory %}
+      <div class="blood-grid-sm">
+        {% for inv in item.inventory %}
+        <div class="blood-card-sm {% if inv.units <= inv.threshold_units %}blood-card-low{% elif inv.units <= inv.threshold_units*1.5 %}blood-card-warn{% else %}blood-card-ok{% endif %}">
+          <div class="bg-type">{{ inv.blood_group }}</div>
+          <div class="bg-units">{{ inv.units }}</div>
+          <div class="bg-label">units</div>
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}
+      <div class="text-muted" style="font-size:0.85rem;padding:0.5rem 0;">No inventory data yet.</div>
+      {% endif %}
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="empty-state">No registered blood banks found.</div>
+  {% endif %}
+</div>
+
+</div><!-- end 2col -->
+
+<!-- Nearby Blood Banks -->
+<div class="panel glass mt-2">
+  <div class="panel-header"><h2>🏦 Nearby Blood Banks</h2><span class="badge badge-info">Sorted by distance</span></div>
+  {% if nearby_blood_banks %}
+  <div class="bb-list">
+    {% for item in nearby_blood_banks %}
+    <a href="{{ url_for('hospital_blood_bank_detail', bb_id=item.bank.id) }}" class="bb-row">
+      <span class="bb-avatar">🏦</span>
+      <div class="bb-info">
+        <span class="bb-name">{{ item.bank.full_name }}</span>
+        <span class="bb-meta">📍 {{ item.bank.address or 'Address not set' }}
+          {% if item.bank.phone %}&nbsp;·&nbsp;📞 {{ item.bank.phone }}{% endif %}
+        </span>
+      </div>
+      <span class="badge {% if item.distance_km is not none %}badge-success{% else %}badge-warning{% endif %}">
+        {% if item.distance_km is not none %}{{ item.distance_km }} km{% else %}Distance unknown{% endif %}
+      </span>
+      <span class="badge badge-info">View →</span>
+    </a>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="empty-state">No registered blood banks found.</div>
+  {% endif %}
+</div>
+
+<!-- Live Volunteer Map -->
+<div class="panel glass mt-2">
+  <div class="panel-header">
+    <h2>🗺️ Live Volunteer Tracking</h2>
+    <span class="badge badge-info">Real-time</span>
+    <button class="btn btn-sm btn-outline" onclick="refreshVolMap()" id="refresh-vol-btn"
+            style="margin-left:auto" title="Reload volunteer positions">🔄 Refresh</button>
+  </div>
+  <div id="map" style="height:300px;border-radius:12px;overflow:hidden"></div>
+</div>
+
+<!-- Pending Donor Donations — Hospital can Accept to trigger volunteer notification -->
+{% if pending_donor_donations %}
+<div class="panel glass mt-2" style="border:1px solid rgba(34,197,94,0.3);background:rgba(34,197,94,0.05);">
+  <div class="panel-header">
+    <h2>🧑‍⚕️ Donors Offering Blood</h2>
+    <span class="badge badge-success">{{ pending_donor_donations|length }} Offers</span>
+  </div>
+  <p style="color:#ccc;font-size:0.85rem;margin-bottom:0.75rem;">
+    These donors have offered to donate blood. <strong>Accepting</strong> will notify a nearby volunteer to coordinate pickup.
+  </p>
+  <div class="table-wrap">
+    <table class="data-table">
+      <thead><tr><th>Donor</th><th>Blood</th><th>Units</th><th>Note</th><th>Date</th><th>Actions</th></tr></thead>
+      <tbody>
+      {% for d in pending_donor_donations %}
+      <tr>
+        <td>
+          {{ d.donor_name }}<br>
+          {% if d.donor_phone %}<small>📞 {{ d.donor_phone }}</small><br>{% endif %}
+          {% if d.donor_address %}<small>📍 {{ d.donor_address }}</small>{% endif %}
+        </td>
+        <td><span class="bg-badge">{{ d.donor_bg or d.blood_group }}</span></td>
+        <td>{{ d.units }}</td>
+        <td>{{ d.request_note or '—' }}</td>
+        <td>{{ d.created_at[:10] }}</td>
+        <td class="action-cell" style="display:flex;gap:0.3rem;flex-wrap:wrap;">
+          <form method="POST" action="{{ url_for('hospital_accept_donor_donation', donation_id=d.id) }}"
+                onsubmit="return confirm('Accept? A nearby volunteer will be notified.')">
+            <button class="btn btn-xs btn-success">✅ Accept &amp; Notify Volunteer</button>
+          </form>
+          <form method="POST" action="{{ url_for('hospital_reject_donor_donation', donation_id=d.id) }}"
+                onsubmit="return confirm('Reject this donor offer?')">
+            <button class="btn btn-xs btn-danger">❌ Reject</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
+<!-- My Requests — Status Lifecycle -->
+<div class="panel glass mt-2">
+  <div class="panel-header"><h2>📋 My Blood Requests</h2></div>
+  {% if my_requests %}
+  <div class="table-wrap">
+    <table class="data-table">
+      <thead><tr><th>#</th><th>Patient</th><th>Blood</th><th>Units</th><th>Priority</th><th>Status</th><th>Volunteer</th><th>Updated</th><th>Actions</th></tr></thead>
+      <tbody>
+      {% for req in my_requests %}
+      <tr class="{% if req.status == 'Pending' %}row-pending{% endif %}">
+        <td>#{{ req.id }}</td>
+        <td>{{ req.patient_name or '—' }}</td>
+        <td><span class="bg-badge">{{ req.blood_group }}</span></td>
+        <td>{{ req.units }}</td>
+        <td><span class="priority-badge priority-{{ req.priority|lower }}">{{ req.priority }}</span></td>
+        <td>
+          <div class="status-flow">
+            {% for s in ['Pending','Approved','Allocated','Fulfilled','Closed'] %}
+            <span class="status-step {% if req.status == s %}active{% elif ['Pending','Approved','Allocated','Fulfilled','Closed'].index(s) < ['Pending','Approved','Allocated','Fulfilled','Closed'].index(req.status) %}done{% endif %}">{{ s }}</span>
+            {% endfor %}
+          </div>
+        </td>
+        <td>{{ req.volunteer_name or '—' }}<br>{% if req.volunteer_phone %}<small>📞 {{ req.volunteer_phone }}</small>{% endif %}</td>
+        <td>{{ req.updated_at[:16] }}</td>
+        <td>
+          {% if req.status == 'Pending' %}
+          <button class="btn btn-xs btn-outline" onclick="toggleEdit({{ req.id }})">✏️ Edit</button>
+          <div id="edit-{{ req.id }}" style="display:none;margin-top:0.5rem;">
+            <form method="POST" action="{{ url_for('hospital_edit_request', req_id=req.id) }}" class="edit-inline-form">
+              <div style="display:flex;gap:0.4rem;flex-wrap:wrap;align-items:center;">
+                <select name="blood_group" class="form-control form-control-sm" style="width:80px">
+                  {% for bg in blood_groups %}<option value="{{ bg }}" {% if bg==req.blood_group %}selected{% endif %}>{{ bg }}</option>{% endfor %}
+                </select>
+                <input type="number" name="units" value="{{ req.units }}" min="1" max="20" class="form-control form-control-sm" style="width:60px" placeholder="Units">
+                <select name="priority" class="form-control form-control-sm" style="width:90px">
+                  {% for p in priorities %}<option value="{{ p }}" {% if p==req.priority %}selected{% endif %}>{{ p }}</option>{% endfor %}
+                </select>
+                <input type="text" name="patient_name" value="{{ req.patient_name or '' }}" class="form-control form-control-sm" style="width:110px" placeholder="Patient">
+                <input type="text" name="note" value="{{ req.note or '' }}" class="form-control form-control-sm" style="width:120px" placeholder="Note">
+                <button class="btn btn-xs btn-success">💾 Save</button>
+                <button type="button" class="btn btn-xs btn-outline" onclick="toggleEdit({{ req.id }})">✕</button>
+              </div>
+            </form>
+          </div>
+          {% elif req.status == 'Fulfilled' %}
+          <button class="btn btn-xs btn-outline" data-id="{{ req.id }}" onclick="showFeedback(this.dataset.id)">📝 Close</button>
+          <div id="fb-{{ req.id }}" style="display:none" class="feedback-form">
+            <form method="POST" action="{{ url_for('close_request', req_id=req.id) }}">
+              <textarea name="feedback" class="form-control" placeholder="Your feedback..." rows="2"></textarea>
+              <select name="rating" class="form-control mt-1">
+                <option value="">Rating</option>
+                {% for i in range(1,6) %}<option value="{{ i }}">{{ i }} ⭐</option>{% endfor %}
+              </select>
+              <button class="btn btn-xs btn-success mt-1">Submit &amp; Close</button>
+            </form>
+          </div>
+          {% elif req.status == 'Closed' %}
+          <span class="badge badge-success">Closed ✅</span>
+          {% if req.feedback %}<small>⭐ {{ req.feedback_rating }}: {{ req.feedback[:40] }}</small>{% endif %}
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}<div class="empty-state">📭 No blood requests yet. Submit one above.</div>{% endif %}
+</div>
+
+<!-- Anonymized Donor List -->
+<div class="panel glass mt-2">
+  <div class="panel-header"><h2>🧑‍⚕️ Available Donors (Anonymized)</h2></div>
+  <div class="donor-list">
+    {% for d in donors %}
+    <div class="donor-chip {% if not d.is_available %}donor-unavail{% endif %}">
+      <span class="bg-badge">{{ d.blood_group }}</span>
+      <span>{{ d.gender or '?' }}, {{ d.age or '?' }} yrs</span>
+      {% if d.is_available %}<span class="badge badge-success">Available</span>{% else %}<span class="badge badge-danger">Unavailable</span>{% endif %}
+    </div>
+    {% endfor %}
+  </div>
+</div>
+
+<style>
+.bb-list { display:flex; flex-direction:column; gap:0.5rem; }
+.bb-row { display:flex; align-items:center; gap:0.8rem; padding:0.7rem 1rem;
+  background:rgba(255,255,255,0.05); border-radius:10px; border:1px solid rgba(255,255,255,0.08);
+  text-decoration:none; color:inherit; transition:background 0.2s; }
+.bb-row:hover { background:rgba(255,255,255,0.1); }
+.bb-avatar { font-size:1.5rem; }
+.bb-info { flex:1; display:flex; flex-direction:column; gap:0.15rem; }
+.bb-name { font-weight:600; color:#fff; }
+.bb-meta { font-size:0.78rem; color:#aaa; }
+.bb-inv-table-wrap { display:flex; flex-direction:column; gap:1rem; }
+.bb-inv-block { padding:0.75rem; background:rgba(255,255,255,0.03); border-radius:10px; border:1px solid rgba(255,255,255,0.07); }
+.bb-inv-header { display:flex; align-items:center; gap:0.5rem; margin-bottom:0.6rem; flex-wrap:wrap; }
+.bb-inv-header a { text-decoration:none; }
+.form-control-sm { padding:0.25rem 0.5rem; font-size:0.82rem; border-radius:6px; }
+.edit-inline-form select, .edit-inline-form input { background:rgba(255,255,255,0.08); color:#fff; border:1px solid rgba(255,255,255,0.2); }
+</style>
+<script>
+function showFeedback(id) {
+  const el = document.getElementById('fb-'+id);
+  el.style.display = el.style.display === 'none' ? 'block' : 'none';
+}
+function toggleEdit(id) {
+  const el = document.getElementById('edit-'+id);
+  el.style.display = el.style.display === 'none' ? 'block' : 'none';
+}
+
+let volMap, volMarkers = [];
+function clearVolMarkers() {
+  volMarkers.forEach(m => volMap.removeLayer(m));
+  volMarkers = [];
+}
+function refreshVolMap() {
+  const btn = document.getElementById('refresh-vol-btn');
+  if (btn) { btn.textContent = '⏳…'; btn.disabled = true; }
+  clearVolMarkers();
+  fetch('/api/live-locations').then(r => r.json()).then(data => {
+    data.forEach(v => {
+      const m = L.marker([v.lat, v.lng], {icon: L.divIcon({html:'🚗', className:'map-vol-icon', iconSize:[30,30]})})
+        .addTo(volMap).bindPopup(`<b>${v.name}</b><br>${v.task}<br>📞 ${v.phone}`);
+      volMarkers.push(m);
+    });
+    if (data.length) volMap.setView([data[0].lat, data[0].lng], 13);
+  }).finally(() => {
+    if (btn) { btn.textContent = '🔄 Refresh'; btn.disabled = false; }
+  });
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  volMap = L.map('map').setView([16.5062, 80.6480], 12);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OpenStreetMap' }).addTo(volMap);
+  refreshVolMap(); // initial load
+});
+</script>
+{% endblock %}
+

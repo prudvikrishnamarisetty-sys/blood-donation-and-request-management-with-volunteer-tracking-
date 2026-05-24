@@ -1,0 +1,160 @@
+{% extends "base.html" %}
+{% block title %}Admin Dashboard{% endblock %}
+{% block content %}
+<div class="dashboard-header">
+  <h1>👨‍💼 Admin Control Center</h1>
+  <p class="dash-sub">System overview, request approvals, and blood bank supervision</p>
+</div>
+
+<!-- User Category Cards (Clickable Drill-down) -->
+<div class="kpi-grid">
+  <a href="{{ url_for('admin_users_by_role', role='donor') }}" class="kpi-card kpi-donors kpi-link">
+    <div class="kpi-icon">🧑‍⚕️</div>
+    <div class="kpi-num" data-count="{{ data.donors }}">0</div>
+    <div class="kpi-label">Donors</div>
+    <div class="kpi-drill">Click to view all →</div>
+  </a>
+  <a href="{{ url_for('admin_users_by_role', role='volunteer') }}" class="kpi-card kpi-vol kpi-link">
+    <div class="kpi-icon">🚗</div>
+    <div class="kpi-num" data-count="{{ data.volunteers }}">0</div>
+    <div class="kpi-label">Volunteers</div>
+    <div class="kpi-drill">Click to view all →</div>
+  </a>
+  <a href="{{ url_for('admin_users_by_role', role='hospital') }}" class="kpi-card kpi-hosp kpi-link">
+    <div class="kpi-icon">🏥</div>
+    <div class="kpi-num" data-count="{{ data.hospitals }}">0</div>
+    <div class="kpi-label">Hospitals</div>
+    <div class="kpi-drill">Click to view all →</div>
+  </a>
+  <a href="{{ url_for('admin_users_by_role', role='blood_bank') }}" class="kpi-card kpi-total kpi-link">
+    <div class="kpi-icon">🏦</div>
+    <div class="kpi-num" data-count="{{ data.blood_banks }}">0</div>
+    <div class="kpi-label">Blood Banks</div>
+    <div class="kpi-drill">Click to view all →</div>
+  </a>
+  <div class="kpi-card kpi-pending">
+    <div class="kpi-icon">⏳</div>
+    <div class="kpi-num" data-count="{{ data.pending_requests }}">0</div>
+    <div class="kpi-label">Pending Requests</div>
+  </div>
+  <div class="kpi-card kpi-fulfilled">
+    <div class="kpi-icon">✅</div>
+    <div class="kpi-num" data-count="{{ data.fulfilled }}">0</div>
+    <div class="kpi-label">Fulfilled</div>
+  </div>
+  <div class="kpi-card kpi-total">
+    <div class="kpi-icon">💉</div>
+    <div class="kpi-num" data-count="{{ data.total_donations }}">0</div>
+    <div class="kpi-label">Donations</div>
+  </div>
+</div>
+
+<!-- Registered Blood Banks -->
+<div class="panel glass mt-2">
+  <div class="panel-header"><h2>🏛️ Registered Blood Banks</h2>
+    <a href="{{ url_for('admin_users_by_role', role='blood_bank') }}" class="btn btn-sm btn-outline">View All →</a>
+  </div>
+  {% if blood_banks %}
+  <div class="bb-list">
+    {% for bb in blood_banks %}
+    <a href="{{ url_for('admin_blood_bank_detail', bb_id=bb.id) }}" class="bb-row">
+      <span class="bb-avatar">🏦</span>
+      <div class="bb-info">
+        <span class="bb-name">{{ bb.full_name }}</span>
+        <span class="bb-meta">{{ bb.address or 'Address not set' }} · {{ bb.phone or '—' }}</span>
+        {% if bb_inventories.get(bb.id) %}
+        <div class="bb-inv-chips">
+          {% for item in bb_inventories[bb.id] %}
+          {% if item.units > 0 %}
+          <span class="inv-chip {% if item.units <= item.threshold_units %}inv-low{% else %}inv-ok{% endif %}">
+            {{ item.blood_group }}: {{ item.units }}
+          </span>
+          {% endif %}
+          {% endfor %}
+        </div>
+        {% endif %}
+      </div>
+      <span class="badge badge-info">View →</span>
+    </a>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="empty-state">No blood banks registered yet.</div>
+  {% endif %}
+</div>
+
+<!-- Broadcast + Recent Users -->
+<div class="dash-grid-2col mt-2">
+<div class="panel glass">
+  <div class="panel-header"><h2>📢 Broadcast Notification</h2></div>
+  <form method="POST" action="{{ url_for('admin_broadcast') }}" class="auth-form">
+    <div class="form-group"><label>Title</label><input type="text" name="title" required class="form-control" placeholder="Notification title"></div>
+    <div class="form-group"><label>Message</label><textarea name="message" required class="form-control" rows="3" placeholder="Your message..."></textarea></div>
+    <div class="form-row">
+      <div class="form-group"><label>Target Role</label>
+        <select name="target_role" class="form-control">
+          <option value="all">All Users</option>
+          <option value="donor">Donors</option><option value="volunteer">Volunteers</option>
+          <option value="hospital">Hospitals</option>
+        </select>
+      </div>
+      <div class="form-group"><label>Type</label>
+        <select name="ntype" class="form-control">
+          <option value="info">Info</option><option value="urgent">Urgent</option><option value="success">Success</option>
+        </select>
+      </div>
+    </div>
+    <button class="btn btn-primary">📢 Send Broadcast</button>
+  </form>
+</div>
+
+<div class="panel glass">
+  <div class="panel-header"><h2>👥 Recent Users</h2>
+    <a href="{{ url_for('admin_users') }}" class="btn btn-sm btn-outline">Manage All →</a>
+  </div>
+  <div class="user-list">
+    {% for u in recent_users %}
+    <div class="user-row">
+      <span class="user-avatar-sm role-badge-{{ u.role }}">{{ u.full_name[0] }}</span>
+      <div class="user-info">
+        <span class="user-name-sm">{{ u.full_name }}</span>
+        <span class="user-meta">{{ u.role|capitalize }} · {{ u.email }}</span>
+      </div>
+      <a href="{{ url_for('admin_user_profile', uid=u.id) }}" class="badge badge-info" style="text-decoration:none">View</a>
+      <span class="badge {% if u.is_verified %}badge-success{% else %}badge-warning{% endif %}">
+        {% if u.is_verified %}Verified{% else %}Pending{% endif %}
+      </span>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+</div>
+
+<style>
+.kpi-link { text-decoration:none; cursor:pointer; position:relative; }
+.kpi-link:hover { transform:translateY(-4px) scale(1.03); }
+.kpi-drill { font-size:0.7rem; color:rgba(255,255,255,0.5); margin-top:0.25rem; }
+.bb-list { display:flex; flex-direction:column; gap:0.5rem; }
+.bb-row { display:flex; align-items:center; gap:0.8rem; padding:0.7rem 1rem;
+  background:rgba(255,255,255,0.05); border-radius:10px; border:1px solid rgba(255,255,255,0.08);
+  text-decoration:none; color:inherit; transition:background 0.2s; }
+.bb-row:hover { background:rgba(255,255,255,0.1); }
+.bb-avatar { font-size:1.5rem; }
+.bb-info { flex:1; display:flex; flex-direction:column; gap:0.15rem; }
+.bb-name { font-weight:600; color:#fff; }
+.bb-meta { font-size:0.78rem; color:#aaa; }
+.bb-inv-chips { display:flex; flex-wrap:wrap; gap:0.25rem; margin-top:0.25rem; }
+.inv-chip { font-size:0.7rem; padding:0.15rem 0.4rem; border-radius:4px; font-weight:600; }
+.inv-ok { background:rgba(34,197,94,0.2); color:#4ade80; border:1px solid rgba(34,197,94,0.3); }
+.inv-low { background:rgba(239,68,68,0.2); color:#f87171; border:1px solid rgba(239,68,68,0.3); }
+</style>
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+  document.querySelectorAll('.kpi-num[data-count]').forEach(el => {
+    const target = parseInt(el.dataset.count) || 0;
+    let cur = 0; const step = Math.ceil(target / 30);
+    const iv = setInterval(() => { cur = Math.min(cur + step, target); el.textContent = cur; if (cur >= target) clearInterval(iv); }, 40);
+  });
+});
+</script>
+{% endblock %}

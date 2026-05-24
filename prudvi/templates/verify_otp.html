@@ -1,0 +1,157 @@
+{% extends "base.html" %}
+{% block title %}Verify Your OTP{% endblock %}
+{% block content %}
+<div class="auth-container">
+  <div class="auth-card glass">
+    <div class="auth-logo">🔐</div>
+    <h2 class="auth-title">OTP Verification</h2>
+    <p class="auth-sub">Your One-Time Password has been generated. Enter it below to activate your account.</p>
+
+    {# ── OTP Banner (shown for 30 seconds) ── #}
+    {% with msgs = get_flashed_messages(with_categories=true) %}
+      {% for cat, msg in msgs %}
+        {% if cat == 'otp' %}
+        <div id="otp-banner" class="otp-banner">
+          <div class="otp-banner-label">🔑 Your OTP Code</div>
+          {# Extract the 6-digit number from the flash message #}
+          <div class="otp-display">{{ msg.split(': ')[-1] }}</div>
+          <div class="otp-timer-row">
+            <span>Disappears in </span>
+            <span id="otp-countdown" class="otp-countdown">30</span>
+            <span>s</span>
+          </div>
+          <div class="otp-progress-wrap"><div id="otp-progress" class="otp-progress"></div></div>
+        </div>
+        {% else %}
+        <div class="alert alert-{{ cat }}">{{ msg }}</div>
+        {% endif %}
+      {% endfor %}
+    {% endwith %}
+
+    {# ── Normal alerts (e.g. "Invalid OTP") ── #}
+
+    <form method="POST" class="auth-form" id="verify-form">
+      <div class="form-group">
+        <label>Enter 6-digit OTP</label>
+        <input type="text" name="otp" id="otp-input" maxlength="6" minlength="6"
+          pattern="\d{6}" required inputmode="numeric"
+          class="form-control otp-input" placeholder="● ● ● ● ● ●" autocomplete="one-time-code">
+      </div>
+      <button class="btn btn-primary btn-block">✅ Verify OTP</button>
+    </form>
+
+    {# ── Resend button (hidden initially, shown after 30 s) ── #}
+    <form method="POST" action="{{ url_for('resend_otp') }}" id="resend-form" style="margin-top:1rem;display:none;">
+      <button type="submit" class="btn btn-outline btn-block" id="resend-btn">
+        🔄 Resend OTP
+      </button>
+    </form>
+
+    <p class="auth-link" style="margin-top:1rem;color:#aaa;font-size:0.85rem;">
+      Wrong account? <a href="{{ url_for('register') }}">Register again</a>.
+    </p>
+  </div>
+</div>
+
+<style>
+.otp-input { font-size:1.5rem; letter-spacing:0.5rem; text-align:center; font-weight:700; }
+
+/* OTP Banner */
+.otp-banner {
+  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+  border: 2px solid #ef4444;
+  border-radius: 14px;
+  padding: 1.2rem 1.5rem 1rem;
+  margin-bottom: 1.2rem;
+  text-align: center;
+  animation: bannerIn 0.4s ease;
+}
+@keyframes bannerIn {
+  from { opacity:0; transform:translateY(-10px); }
+  to   { opacity:1; transform:translateY(0); }
+}
+.otp-banner-label {
+  font-size: 0.8rem;
+  color: #ef4444;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  margin-bottom: 0.4rem;
+}
+.otp-display {
+  font-size: 2.8rem;
+  font-weight: 900;
+  letter-spacing: 10px;
+  color: #fff;
+  text-shadow: 0 0 20px rgba(239,68,68,0.5);
+  margin: 0.3rem 0;
+}
+.otp-timer-row {
+  font-size: 0.85rem;
+  color: #aaa;
+  margin-top: 0.5rem;
+}
+.otp-countdown {
+  color: #ef4444;
+  font-weight: 700;
+  font-size: 1rem;
+}
+.otp-progress-wrap {
+  background: rgba(255,255,255,0.1);
+  border-radius: 99px;
+  height: 4px;
+  margin-top: 0.6rem;
+  overflow: hidden;
+}
+.otp-progress {
+  height: 100%;
+  width: 100%;
+  background: #ef4444;
+  border-radius: 99px;
+  transition: width 1s linear;
+}
+.btn-outline {
+  background: transparent;
+  border: 2px solid #ef4444;
+  color: #ef4444;
+}
+.btn-outline:hover {
+  background: rgba(239,68,68,0.1);
+}
+</style>
+
+<script>
+(function() {
+  var banner = document.getElementById('otp-banner');
+  var resendForm = document.getElementById('resend-form');
+  var countdown = document.getElementById('otp-countdown');
+  var progress = document.getElementById('otp-progress');
+
+  if (!banner) {
+    // No OTP banner this load — just show resend immediately if session is active
+    resendForm && (resendForm.style.display = 'block');
+    return;
+  }
+
+  var total = 30;
+  var remaining = total;
+
+  var timer = setInterval(function() {
+    remaining--;
+    if (countdown) countdown.textContent = remaining;
+    if (progress) progress.style.width = (remaining / total * 100) + '%';
+
+    if (remaining <= 0) {
+      clearInterval(timer);
+      // Fade out banner
+      banner.style.transition = 'opacity 0.6s ease';
+      banner.style.opacity = '0';
+      setTimeout(function() {
+        banner.style.display = 'none';
+        // Show resend button
+        if (resendForm) resendForm.style.display = 'block';
+      }, 600);
+    }
+  }, 1000);
+})();
+</script>
+{% endblock %}
